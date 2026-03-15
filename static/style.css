@@ -1,0 +1,59 @@
+:root {
+  --bg-color: #0d1117;
+  --panel-bg: rgba(22, 27, 34, 0.6);
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --accent: #58a6ff;
+  --success: #2ea043;
+  --danger: #da3633;
+  --warning: #e3b341;
+  --border: rgba(48, 54, 61, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.05);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+body { background: var(--bg-color); color: var(--text-primary); padding: 20px; line-height: 1.5; }
+
+.container { max-width: 1200px; margin: 0 auto; }
+
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding: 20px; border-radius: 16px; background: var(--panel-bg); backdrop-filter: blur(10px); border: 1px solid var(--glass-border); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+
+h1 { font-weight: 700; background: linear-gradient(135deg, #58a6ff, #a371f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+.status-indicator { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.status-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--success); box-shadow: 0 0 10px var(--success); }
+
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+.card { background: var(--panel-bg); backdrop-filter: blur(10px); border: 1px solid var(--glass-border); padding: 20px; border-radius: 16px; text-align: center; transition: transform 0.2s; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+.card:hover { transform: translateY(-5px); border-color: var(--accent); }
+.card h3 { color: var(--text-secondary); font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+.card .value { font-size: 32px; font-weight: 700; color: #fff; }
+
+.charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }
+.chart-container { background: var(--panel-bg); backdrop-filter: blur(10px); border: 1px solid var(--glass-border); padding: 20px; border-radius: 16px; min-height: 300px; }
+
+.table-section { background: var(--panel-bg); backdrop-filter: blur(10px); border: 1px solid var(--glass-border); padding: 20px; border-radius: 16px; margin-bottom: 30px; overflow-x: auto;}
+.table-section h2 { margin-bottom: 20px; font-size: 18px; color: #fff;}
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--text-secondary); font-weight: 500; text-transform: uppercase; font-size: 12px; letter-spacing: 0.05em; }
+tbody tr { transition: background 0.2s; }
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+.upload-form { display: flex; flex-direction: column; gap: 15px; }
+.form-group { display: flex; flex-direction: column; gap: 8px; }
+.form-hint { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+.media-upload { padding: 12px; border: 1px dashed var(--border); border-radius: 8px; background: rgba(88, 166, 255, 0.05); }
+.media-upload label { font-weight: 600; color: var(--accent); }
+input[type="text"], input[type="file"], textarea { padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: rgba(0,0,0,0.2); color: #fff; font-size: 14px; outline: none; transition: border 0.3s; }
+input:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 100px; }
+.btn { padding: 12px 20px; border: none; border-radius: 8px; background: linear-gradient(135deg, #1f6feb, #3b82f6); color: #fff; font-weight: 600; cursor: pointer; transition: opacity 0.3s, transform 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 8px;}
+.btn:hover { opacity: 0.9; transform: translateY(-2px); }
+.btn:active { transform: translateY(0); }
+
+.badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.badge.success { background: rgba(46, 160, 67, 0.15); color: var(--success); border: 1px solid rgba(46, 160, 67, 0.3); }
+.badge.danger { background: rgba(218, 54, 51, 0.15); color: var(--danger); border: 1px solid rgba(218, 54, 51, 0.3); }
+.badge.warning { background: rgba(227, 179, 65, 0.15); color: var(--warning); border: 1px solid rgba(227, 179, 65, 0.3); }

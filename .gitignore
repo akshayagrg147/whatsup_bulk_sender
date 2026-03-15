@@ -1,0 +1,30 @@
+# Environment and secrets
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# Data and uploads (local runtime)
+data/
+uploads/
+*.db
+app.log
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Sample data (optional - remove if you want to track sample Excel)
+# sample_contacts.xlsx

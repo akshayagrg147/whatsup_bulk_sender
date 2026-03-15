@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Marketing Suite</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WhatsApp Marketing Suite</h1>
+            <div class="status-indicator">
+                <span class="status-dot"></span> Evolution API: Connected
+            </div>
+        </header>
+
+        <div class="overview-grid">
+            <div class="card">
+                <h3>Today's Sent</h3>
+                <div class="value">{{ stats.total_sent }}</div>
+            </div>
+            <div class="card">
+                <h3>Delivery Rate</h3>
+                <div class="value">{{ stats.delivery_rate }}%</div>
+            </div>
+            <div class="card">
+                <h3>Read Rate</h3>
+                <div class="value">{{ stats.read_rate }}%</div>
+            </div>
+            <div class="card">
+                <h3>Reply Rate</h3>
+                <div class="value">{{ stats.reply_rate }}%</div>
+            </div>
+            <div class="card">
+                <h3>Blocked Count</h3>
+                <div class="value" style="color: var(--danger)">{{ stats.blocked_count }}</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-container">
+                <canvas id="barChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="pieChart"></canvas>
+            </div>
+        </div>
+
+        <div class="charts-grid" style="grid-template-columns: 1fr;">
+            <div class="chart-container" style="min-height: 200px;">
+                <canvas id="lineChart"></canvas>
+            </div>
+        </div>
+
+        <div class="charts-grid" style="grid-template-columns: 1fr 2fr;">
+            <div class="table-section">
+                <h2>Start Bulk Campaign</h2>
+                <form id="uploadForm" class="upload-form">
+                    <div class="form-group">
+                        <label>Campaign Name</label>
+                        <input type="text" name="campaign_name" placeholder="e.g. Diwali_Sale_2026" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Contacts Excel File</label>
+                        <input type="file" name="file" accept=".xlsx,.xls" required>
+                    </div>
+                    <div class="form-group media-upload">
+                        <label>📎 Attach Video / Image / Audio / PDF (optional)</label>
+                        <input type="file" name="media_file" accept=".mp4,.mov,.avi,.jpg,.jpeg,.png,.gif,.mp3,.ogg,.wav,.pdf,.docx,.xlsx">
+                        <small class="form-hint">Video, image, audio or document. Your message text will be sent as the caption.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Message Template (Use {Name})</label>
+                        <textarea name="message_template" placeholder="Hi {Name}, check out our new offers...&#10;&#10;Reply STOP to unsubscribe." required></textarea>
+                    </div>
+                    <button type="submit" class="btn">🚀 Start Bulk Send</button>
+                    <div id="uploadStatus" style="margin-top: 10px; font-size: 14px; font-weight: 500;"></div>
+                </form>
+            </div>
+
+            <div class="table-section">
+                <h2>Campaign History</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Campaign</th>
+                            <th>Date</th>
+                            <th>Sent</th>
+                            <th>Delivered</th>
+                            <th>Read Rate</th>
+                            <th>Reply Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in campaigns %}
+                        <tr>
+                            <td>{{ c.campaign_name }}</td>
+                            <td>{{ c.date }}</td>
+                            <td>{{ c.sent }}</td>
+                            <td>{{ c.delivered }}</td>
+                            <td>{{ c.read_rate }}%</td>
+                            <td>{{ c.reply_rate }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="table-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>All Contacts</h2>
+                <button class="btn" style="padding: 8px 16px; font-size: 13px;" onclick="window.location.reload()">Refresh Data</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Total Sent</th>
+                        <th>Replies</th>
+                        <th>Status</th>
+                        <th>Last Activity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for contact in contacts %}
+                    <tr>
+                        <td>{{ contact.name or 'Unknown' }}</td>
+                        <td>{{ contact.phone }}</td>
+                        <td>{{ contact.total_messages_sent }}</td>
+                        <td>{{ contact.total_replies }}</td>
+                        <td>
+                            <span class="badge {{ 'danger' if contact.status == 'Blocked' else ('warning' if contact.status == 'Unsubscribed' else 'success') }}">{{ contact.status }}</span>
+                        </td>
+                        <td>{{ contact.last_seen }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        setInterval(() => window.location.reload(), 30000);
+
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if(!confirm("Are you sure you want to start this bulk campaign?")) return;
+            
+            const btn = this.querySelector('button');
+            const statusDiv = document.getElementById('uploadStatus');
+            btn.disabled = true;
+            btn.innerText = 'Uploading...';
+            
+            const formData = new FormData(this);
+            fetch('/upload', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) {
+                    statusDiv.innerHTML = `<span style="color: var(--danger)">❌ ${data.error}</span>`;
+                } else {
+                    statusDiv.innerHTML = `<span style="color: var(--success)">✅ ${data.success}</span>`;
+                    this.reset();
+                }
+            })
+            .catch(err => {
+                statusDiv.innerHTML = `<span style="color: var(--danger)">❌ Upload Failed</span>`;
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerText = '🚀 Start Bulk Send';
+            });
+        });
+
+        const chartsData = {{ charts | tojson | safe }};
+        
+        Chart.defaults.color = '#8b949e';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+        Chart.defaults.font.family = 'Inter, sans-serif';
+
+        new Chart(document.getElementById('barChart'), {
+            type: 'bar',
+            data: {
+                labels: chartsData.bar.labels,
+                datasets: [{
+                    label: 'Messages Sent',
+                    data: chartsData.bar.data,
+                    backgroundColor: 'rgba(88, 166, 255, 0.5)',
+                    borderColor: '#58a6ff',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Last 7 Days Activity' } } }
+        });
+
+        new Chart(document.getElementById('pieChart'), {
+            type: 'doughnut',
+            data: {
+                labels: chartsData.pie.labels,
+                datasets: [{
+                    data: chartsData.pie.data,
+                    backgroundColor: ['#1f6feb', '#2ea043', '#8957e5', '#e3b341'],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Overall Funnel' }, legend: { position: 'bottom' } } }
+        });
+
+        new Chart(document.getElementById('lineChart'), {
+            type: 'line',
+            data: {
+                labels: chartsData.line.labels.map(h => h + ':00'),
+                datasets: [{
+                    label: 'Replies Received By Hour',
+                    data: chartsData.line.data,
+                    borderColor: '#a371f7',
+                    backgroundColor: 'rgba(163, 113, 247, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Best Time to Send (Engagement Heatmap)' } } }
+        });
+    </script>
+</body>
+</html>
