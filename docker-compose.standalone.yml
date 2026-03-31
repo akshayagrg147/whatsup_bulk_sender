@@ -1,0 +1,61 @@
+# Run on another system: load the image (docker load -i whatsapp-marketing-suite.tar)
+# then: docker-compose -f docker-compose.standalone.yml up -d
+# No source code needed. Set variables in .env (copy from .env.example).
+
+services:
+  evolution-api:
+    image: atendai/evolution-api:v1.7.4
+    container_name: evolution_api
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_TYPE=apikey
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      - QRCODE_LIMIT=30
+      - QRCODE_COLOR=#198754
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    restart: always
+
+  whatsapp-marketing:
+    image: whatsapp-marketing-suite:latest
+    container_name: whatsapp_marketing
+    ports:
+      - "${FLASK_PORT:-5001}:5001"
+    environment:
+      - EVOLUTION_BASE_URL=http://evolution-api:8080
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-marketing_instance}
+      - FLASK_PORT=5001
+      - DAILY_MESSAGE_LIMIT=${DAILY_MESSAGE_LIMIT:-200}
+      - BATCH_SIZE=${BATCH_SIZE:-30}
+      - BATCH_PAUSE_MIN=${BATCH_PAUSE_MIN:-5}
+      - BATCH_PAUSE_MAX=${BATCH_PAUSE_MAX:-10}
+      - MESSAGE_DELAY_MIN=${MESSAGE_DELAY_MIN:-4}
+      - MESSAGE_DELAY_MAX=${MESSAGE_DELAY_MAX:-9}
+      - BUSINESS_START_HOUR=${BUSINESS_START_HOUR:-9}
+      - BUSINESS_END_HOUR=${BUSINESS_END_HOUR:-21}
+      - TIMEZONE=${TIMEZONE:-Asia/Kolkata}
+      - DB_PATH=/data/marketing.db
+      - YOUR_STORE_URL=${YOUR_STORE_URL:-https://yourstore.com}
+      - YOUR_PHONE=${YOUR_PHONE:-+91-XXXXXXXXXX}
+      - WEBHOOK_BASE_URL=http://whatsapp-marketing:5001
+    volumes:
+      - marketing_data:/data
+      - marketing_uploads:/app/uploads
+    depends_on:
+      - evolution-api
+    restart: always
+
+volumes:
+  evolution_instances:
+  evolution_store:
+  marketing_data:
+  marketing_uploads:

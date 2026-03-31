@@ -64,9 +64,11 @@ def get_ist_now():
     tz = pytz.timezone(TIMEZONE)
     return datetime.datetime.now(tz)
 
-def process_webhook(data):
+def process_webhook(data, instance_name=None):
+    """Process webhook payload. instance_name = which WhatsApp number received the message (for per-instance opt-out)."""
+    instance = instance_name or EVOLUTION_INSTANCE
     event = data.get('event')
-    
+
     if event == 'messages.update':
         updates = data.get('data', [])
         for update in updates:
@@ -75,51 +77,47 @@ def process_webhook(data):
                 if phone:
                     status = update['status']
                     update_message_status(phone, status.lower())
-                
+
     elif event == 'messages.upsert':
         messages = data.get('data', {}).get('messages', [])
         for msg in messages:
             if msg.get('key', {}).get('fromMe', False):
                 continue
-                
+
             phone = msg.get('key', {}).get('remoteJid', '').split('@')[0]
             if not phone:
                 continue
-            
-            # Identify text payload structure might differ lightly between Evolution versions
+
             msg_obj = msg.get('message', {})
-            text = (msg_obj.get('conversation') or 
+            text = (msg_obj.get('conversation') or
                     msg_obj.get('extendedTextMessage', {}).get('text') or '')
-            
+
             if not text:
                 continue
-                
-            remote_name = msg.get('pushName', 'Unknown')
-            
-            # Check if this is the first message before logging it
-            first = is_first_time(phone)
-            
-            # Log incoming message
-            log_message(phone, remote_name, text, 'received', 'received', EVOLUTION_INSTANCE)
-            
-            handle_incoming_text(phone, remote_name, text, first)
 
-def handle_incoming_text(phone, name, text, first_time):
+            remote_name = msg.get('pushName', 'Unknown')
+            first = is_first_time(phone)
+
+            log_message(phone, remote_name, text, 'received', 'received', instance)
+            handle_incoming_text(phone, remote_name, text, first, instance_name=instance)
+
+def handle_incoming_text(phone, name, text, first_time, instance_name=None):
+    instance = instance_name or EVOLUTION_INSTANCE
     text_lower = (text or "").strip().lower()
 
-    # Handle STOP / unsubscribe (e.g. "send stop", "stop", "unsubscribe")
+    # Handle STOP / unsubscribe (per instance)
     if any(kw in text_lower for kw in STOP_KEYWORDS):
-        set_opted_out(phone, True)
-        send_whatsapp_message(phone, STOP_CONFIRM_MSG)
-        log_message(phone, name, STOP_CONFIRM_MSG, 'sent', 'sent', EVOLUTION_INSTANCE, 'auto_reply')
-        logger.info(f"Contact {phone} ({name}) opted out from promotional messages.")
+        set_opted_out(phone, True, instance_name=instance)
+        send_whatsapp_message(phone, STOP_CONFIRM_MSG, instance_name=instance)
+        log_message(phone, name, STOP_CONFIRM_MSG, 'sent', 'sent', instance, 'auto_reply')
+        logger.info(f"Contact {phone} ({name}) opted out from promotional messages (instance: {instance}).")
         return
-    # Handle START / re-subscribe
+    # Handle START / re-subscribe (per instance)
     if text_lower == "start":
-        set_opted_out(phone, False)
-        send_whatsapp_message(phone, START_CONFIRM_MSG)
-        log_message(phone, name, START_CONFIRM_MSG, 'sent', 'sent', EVOLUTION_INSTANCE, 'auto_reply')
-        logger.info(f"Contact {phone} ({name}) re-subscribed to promotional messages.")
+        set_opted_out(phone, False, instance_name=instance)
+        send_whatsapp_message(phone, START_CONFIRM_MSG, instance_name=instance)
+        log_message(phone, name, START_CONFIRM_MSG, 'sent', 'sent', instance, 'auto_reply')
+        logger.info(f"Contact {phone} ({name}) re-subscribed (instance: {instance}).")
         return
 
     now = get_ist_now()
@@ -132,8 +130,8 @@ def handle_incoming_text(phone, name, text, first_time):
             "Hum kal subah 9 baje aapko reply karenge! 🙏\n"
             "Emergency ke liye: +91-XXXXXXXXXX"
         )
-        send_whatsapp_message(phone, after_hours_msg)
-        log_message(phone, name, after_hours_msg, 'sent', 'sent', EVOLUTION_INSTANCE, 'auto_reply')
+        send_whatsapp_message(phone, after_hours_msg, instance_name=instance)
+        log_message(phone, name, after_hours_msg, 'sent', 'sent', instance, 'auto_reply')
         return
 
     if first_time:
@@ -145,28 +143,28 @@ def handle_incoming_text(phone, name, text, first_time):
             "2️⃣ Order karne ke liye\n"
             "3️⃣ Support ke liye"
         )
-        send_whatsapp_message(phone, welcome_msg)
-        log_message(phone, name, welcome_msg, 'sent', 'sent', EVOLUTION_INSTANCE, 'auto_reply')
-        
+        send_whatsapp_message(phone, welcome_msg, instance_name=instance)
+        log_message(phone, name, welcome_msg, 'sent', 'sent', instance, 'auto_reply')
+
         quick_replies = (
             "⬇️ Quick reply ke liye yeh type karein:\n"
             "🔹 ORDER KARNA HAI\n"
             "🔹 PRICE LIST CHAHIYE\n"
             "🔹 SUPPORT CHAHIYE"
         )
-        send_whatsapp_message(phone, quick_replies)
-        log_message(phone, name, quick_replies, 'sent', 'sent', EVOLUTION_INSTANCE, 'auto_reply')
+        send_whatsapp_message(phone, quick_replies, instance_name=instance)
+        log_message(phone, name, quick_replies, 'sent', 'sent', instance, 'auto_reply')
         return
 
     text_lower = text.lower()
     matched = False
     for keywords, reply_text in KEYWORDS.items():
         if any(kw in text_lower for kw in keywords):
-            send_whatsapp_message(phone, reply_text)
-            log_message(phone, name, reply_text, 'sent', 'sent', EVOLUTION_INSTANCE, 'auto_reply')
+            send_whatsapp_message(phone, reply_text, instance_name=instance)
+            log_message(phone, name, reply_text, 'sent', 'sent', instance, 'auto_reply')
             matched = True
             break
-            
+
     if not matched:
-        send_whatsapp_message(phone, DEFAULT_REPLY)
-        log_message(phone, name, DEFAULT_REPLY, 'sent', 'sent', EVOLUTION_INSTANCE, 'auto_reply')
+        send_whatsapp_message(phone, DEFAULT_REPLY, instance_name=instance)
+        log_message(phone, name, DEFAULT_REPLY, 'sent', 'sent', instance, 'auto_reply')

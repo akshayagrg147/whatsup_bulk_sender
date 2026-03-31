@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,14 +9,36 @@
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
     <div class="container">
         <header>
-            <h1>WhatsApp Marketing Suite</h1>
-            <div class="status-indicator">
-                <span class="status-dot"></span> Evolution API: Connected
+            <div class="header-left">
+                <h1>WhatsApp Marketing Suite</h1>
+                <div class="status-indicator">
+                    <span class="status-dot"></span> Evolution API: Connected
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <span class="username">👤 {{ user.username }}</span>
+                    <span class="subscription {{ 'expired' if days_left == 0 else 'active' }}">
+                        {{ 'Expired' if days_left == 0 else days_left ~ ' days left' }}
+                    </span>
+                    <a href="/logout" class="btn-logout">Logout</a>
+                </div>
             </div>
         </header>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert {{ 'alert-danger' if 'subscription' in message.lower() else 'alert-info' }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
 
         <div class="overview-grid">
             <div class="card">
@@ -59,6 +82,22 @@
             <div class="table-section">
                 <h2>Start Bulk Campaign</h2>
                 <form id="uploadForm" class="upload-form">
+                    <div class="form-group instance-select"
+                        style="background: rgba(88,166,255,0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(88,166,255,0.3); margin-bottom: 16px;">
+                        <label style="font-weight: 700; color: #58a6ff;">📱 WhatsApp Number</label>
+                        <select name="instance_name" required style="margin-top: 8px;">
+                            <option value="__auto__" selected>🔄 Auto — rotate (200 per number, then next number)
+                            </option>
+                            {% for inst in (instances or []) %}
+                            <option value="{{ inst }}">{{ inst }}</option>
+                            {% else %}
+                            <option value="marketing_instance">marketing_instance</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-hint" style="display: block; margin-top: 6px;">Auto = use multiple numbers in
+                            sequence. Or pick one number. Add instances in Evolution API (port 8080) and in .env
+                            EVOLUTION_INSTANCES.</small>
+                    </div>
                     <div class="form-group">
                         <label>Campaign Name</label>
                         <input type="text" name="campaign_name" placeholder="e.g. Diwali_Sale_2026" required>
@@ -69,12 +108,16 @@
                     </div>
                     <div class="form-group media-upload">
                         <label>📎 Attach Video / Image / Audio / PDF (optional)</label>
-                        <input type="file" name="media_file" accept=".mp4,.mov,.avi,.jpg,.jpeg,.png,.gif,.mp3,.ogg,.wav,.pdf,.docx,.xlsx">
-                        <small class="form-hint">Video, image, audio or document. Your message text will be sent as the caption.</small>
+                        <input type="file" name="media_file"
+                            accept=".mp4,.mov,.avi,.jpg,.jpeg,.png,.gif,.mp3,.ogg,.wav,.pdf,.docx,.xlsx">
+                        <small class="form-hint">Video, image, audio or document. Your message text will be sent as the
+                            caption.</small>
                     </div>
                     <div class="form-group">
                         <label>Message Template (Use {Name})</label>
-                        <textarea name="message_template" placeholder="Hi {Name}, check out our new offers...&#10;&#10;Reply STOP to unsubscribe." required></textarea>
+                        <textarea name="message_template"
+                            placeholder="Hi {Name}, check out our new offers...&#10;&#10;Reply STOP to unsubscribe."
+                            required></textarea>
                     </div>
                     <button type="submit" class="btn">🚀 Start Bulk Send</button>
                     <div id="uploadStatus" style="margin-top: 10px; font-size: 14px; font-weight: 500;"></div>
@@ -109,11 +152,12 @@
                 </table>
             </div>
         </div>
-        
+
         <div class="table-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2>All Contacts</h2>
-                <button class="btn" style="padding: 8px 16px; font-size: 13px;" onclick="window.location.reload()">Refresh Data</button>
+                <button class="btn" style="padding: 8px 16px; font-size: 13px;"
+                    onclick="window.location.reload()">Refresh Data</button>
             </div>
             <table>
                 <thead>
@@ -134,7 +178,9 @@
                         <td>{{ contact.total_messages_sent }}</td>
                         <td>{{ contact.total_replies }}</td>
                         <td>
-                            <span class="badge {{ 'danger' if contact.status == 'Blocked' else ('warning' if contact.status == 'Unsubscribed' else 'success') }}">{{ contact.status }}</span>
+                            <span
+                                class="badge {{ 'danger' if contact.status == 'Blocked' else ('warning' if contact.status == 'Unsubscribed' else 'success') }}">{{
+                                contact.status }}</span>
                         </td>
                         <td>{{ contact.last_seen }}</td>
                     </tr>
@@ -144,40 +190,59 @@
         </div>
     </div>
 
-    <script>
-        setInterval(() => window.location.reload(), 30000);
+    <!-- Subscription Expiry Modal -->
+    {% if days_left == 0 %}
+    <div id="expiryModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-icon">⚠️</div>
+            <h2>Subscription Expired</h2>
+            <p>Your subscription has completed its term. To continue using the bulk messaging and auto-reply features,
+                please renew your plan.</p>
+            <div class="modal-actions">
+                <a href="mailto:support@yourdomain.com?subject=Subscription%20Renewal" class="btn btn-primary">Renew
+                    Now</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
-        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    <div id="charts-data" style="display:none" data-charts='{{ charts | tojson | safe }}'></div>
+
+    <script>
+        // Auto-refresh dashboard every 2 minutes
+        setInterval(() => window.location.reload(), 120000);
+
+        document.getElementById('uploadForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            if(!confirm("Are you sure you want to start this bulk campaign?")) return;
-            
+            if (!confirm("Are you sure you want to start this bulk campaign?")) return;
+
             const btn = this.querySelector('button');
             const statusDiv = document.getElementById('uploadStatus');
             btn.disabled = true;
             btn.innerText = 'Uploading...';
-            
+
             const formData = new FormData(this);
             fetch('/upload', { method: 'POST', body: formData })
-            .then(res => res.json())
-            .then(data => {
-                if(data.error) {
-                    statusDiv.innerHTML = `<span style="color: var(--danger)">❌ ${data.error}</span>`;
-                } else {
-                    statusDiv.innerHTML = `<span style="color: var(--success)">✅ ${data.success}</span>`;
-                    this.reset();
-                }
-            })
-            .catch(err => {
-                statusDiv.innerHTML = `<span style="color: var(--danger)">❌ Upload Failed</span>`;
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.innerText = '🚀 Start Bulk Send';
-            });
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        statusDiv.innerHTML = `<span style="color: var(--danger)">❌ ${data.error}</span>`;
+                    } else {
+                        statusDiv.innerHTML = `<span style="color: var(--success)">✅ ${data.success}</span>`;
+                        this.reset();
+                    }
+                })
+                .catch(err => {
+                    statusDiv.innerHTML = `<span style="color: var(--danger)">❌ Upload Failed</span>`;
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerText = '🚀 Start Bulk Send';
+                });
         });
 
-        const chartsData = {{ charts | tojson | safe }};
-        
+        const chartsData = JSON.parse(document.getElementById('charts-data').dataset.charts);
+
         Chart.defaults.color = '#8b949e';
         Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
         Chart.defaults.font.family = 'Inter, sans-serif';
@@ -229,4 +294,5 @@
         });
     </script>
 </body>
+
 </html>

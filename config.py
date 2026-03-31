@@ -5,8 +5,15 @@ load_dotenv()
 
 EVOLUTION_BASE_URL = os.getenv("EVOLUTION_BASE_URL", "http://localhost:8080")
 EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "your_secret_key_here")
+# Single instance (default) for backward compatibility
 EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "marketing_instance")
+# Multiple instances: comma-separated, e.g. EVOLUTION_INSTANCES=number1,number2,support
+# If set, these are used for webhook registration and instance dropdown in dashboard.
+_instances_raw = os.getenv("EVOLUTION_INSTANCES", "").strip()
+EVOLUTION_INSTANCES = [s.strip() for s in _instances_raw.split(",") if s.strip()] if _instances_raw else [EVOLUTION_INSTANCE]
 FLASK_PORT = int(os.getenv("FLASK_PORT", 5000))
+# When running app inside Docker with Evolution API, set e.g. WEBHOOK_BASE_URL=http://whatsapp-marketing:5001
+WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", f"http://host.docker.internal:{FLASK_PORT}")
 
 DAILY_MESSAGE_LIMIT = int(os.getenv("DAILY_MESSAGE_LIMIT", 200))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 30))

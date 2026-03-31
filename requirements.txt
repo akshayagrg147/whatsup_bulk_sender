@@ -5,3 +5,5 @@ openpyxl
 apscheduler
 python-dotenv
 pytz
+flask-login
+werkzeug

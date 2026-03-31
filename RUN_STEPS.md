@@ -15,6 +15,9 @@
   If you change it, use the **same** value in Step 2 for Docker.
 - Your project uses `FLASK_PORT=5001`, so the dashboard will be at **http://localhost:5001/dashboard**.
 - Optionally set `YOUR_STORE_URL` and `YOUR_PHONE` for auto-reply messages.
+- **Multiple WhatsApp numbers:** Set `EVOLUTION_INSTANCES=number1,number2,support` (comma-separated). Connect each in Evolution API (create instance → scan QR). In the dashboard you can either:
+  - **Auto (rotate when 200/day reached):** Messages 1–200 go from first number, 201–400 from second, etc. No need to pick a number.
+  - Or pick a specific instance to send only from that number.
 
 ---
 
@@ -85,7 +88,7 @@ You should see something like:
 
 ## Step 5: Connect WhatsApp (QR code)
 
-1. Get the QR code from Evolution API. For example:
+1. Get the QR code from Evolution API. If you use **multiple instances** (`EVOLUTION_INSTANCES`), create and connect each one in Evolution API (e.g. create `number1`, scan QR; create `number2`, scan QR). Each instance = one WhatsApp number. For example:
    - **REST:**  
      `GET http://localhost:8080/instance/connect/{EVOLUTION_INSTANCE}`  
      with header `apikey: YOUR_EVOLUTION_API_KEY`  
