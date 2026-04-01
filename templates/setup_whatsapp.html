@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp setup — {{ user.username }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>WhatsApp setup</h1>
+                <p style="color: var(--muted); margin: 0;">Account: {{ user.username }}</p>
+                {% if user.public_id %}
+                <p style="color: var(--muted); margin: 0.35rem 0 0; font-size: 13px;">Unique account ID (share with
+                    support only): <code style="user-select: all;">{{ user.public_id }}</code></p>
+                {% endif %}
+            </div>
+            <div class="header-right">
+                <a href="/dashboard" class="btn-logout" style="text-decoration: none;">← Dashboard</a>
+            </div>
+        </header>
+
+        <div class="table-section" style="max-width: 720px;">
+            <h2>Your Evolution API instances</h2>
+            <p>Each name below is a separate WhatsApp connection. Create matching instances in Evolution API, then scan the
+                QR code for each one. By default the primary instance name is your <strong>Account ID</strong> (same UUID,
+                lowercase, with hyphens). A 32-character hex name without hyphens is treated as the same account for routing.</p>
+            <h3 style="margin-top: 1rem;">Two or more WhatsApp numbers</h3>
+            <p>Your admin adds extra names as a <strong>comma-separated</strong> list in your account (or appends one at a
+                time). Examples: <code>4724b106-8497-4191-88a0-1b3f09722ee2</code> (primary) plus
+                <code>4724b1068497419188a01b3f09722ee2_sales</code> — each segment must be created separately in Evolution
+                Manager and linked with its own QR scan. The campaign dropdown lists <strong>all</strong> names; choose
+                <strong>Auto</strong> on the dashboard to rotate across every line you own.</p>
+            <p style="font-size: 13px; color: var(--muted);">Admin: <code>POST /admin/users/&lt;id&gt;/evolution-instances</code>
+                with body <code>{"instances":"name1,name2,name3"}</code>, or <code>POST .../evolution-instances/append</code>
+                with <code>{"instance":"extra_name"}</code> to add without replacing the list.</p>
+            {% if instance_names %}
+            <ul style="line-height: 1.8;">
+                {% for n in instance_names %}
+                <li><code>{{ n }}</code></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="alert alert-danger">No instance names are assigned yet. Ask your administrator to set
+                <code>evolution_instances</code> for your account (comma-separated names that match Evolution).</p>
+            {% endif %}
+
+            <h3 style="margin-top: 1.5rem;">Evolution Manager</h3>
+            <p>Open the manager, create an instance with the <strong>exact</strong> name above, then connect / scan QR:</p>
+            <p><a href="{{ evolution_manager_hint }}" target="_blank" rel="noopener">{{ evolution_manager_hint }}</a></p>
+
+            <h3 style="margin-top: 1.5rem;">Webhooks</h3>
+            <p>The app registers these URLs with Evolution when it starts (and after an admin updates instance names).
+                Incoming messages are routed to your account by instance name.</p>
+            {% if webhook_urls %}
+            <ul style="font-size: 13px; word-break: break-all;">
+                {% for u in webhook_urls %}
+                <li><code>{{ u }}</code></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="color: var(--muted);">No webhook URLs until instance names are configured.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+
+</html>

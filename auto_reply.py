@@ -1,7 +1,14 @@
 import logging
 import datetime
 import pytz
-from database import log_message, update_message_status, is_first_time, set_opted_out, is_opted_out
+from database import (
+    log_message,
+    update_message_status,
+    is_first_time,
+    set_opted_out,
+    is_opted_out,
+    get_tenant_id_for_instance,
+)
 from config import BUSINESS_START_HOUR, BUSINESS_END_HOUR, TIMEZONE, EVOLUTION_INSTANCE
 from bulk_sender import send_whatsapp_message
 
@@ -67,6 +74,14 @@ def get_ist_now():
 def process_webhook(data, instance_name=None):
     """Process webhook payload. instance_name = which WhatsApp number received the message (for per-instance opt-out)."""
     instance = instance_name or EVOLUTION_INSTANCE
+    tenant_id = get_tenant_id_for_instance(instance)
+    if tenant_id is None:
+        tenant_id = 1
+        logger.warning(
+            "Webhook for instance %r is not mapped to any user; using tenant_id=1. "
+            "Set users.evolution_instances to include this instance name.",
+            instance,
+        )
     event = data.get('event')
 
     if event == 'messages.update':
@@ -76,7 +91,7 @@ def process_webhook(data, instance_name=None):
                 phone = update['key'].get('remoteJid', '').split('@')[0]
                 if phone:
                     status = update['status']
-                    update_message_status(phone, status.lower())
+                    update_message_status(phone, status.lower(), tenant_id=tenant_id)
 
     elif event == 'messages.upsert':
         messages = data.get('data', {}).get('messages', [])
@@ -96,12 +111,14 @@ def process_webhook(data, instance_name=None):
                 continue
 
             remote_name = msg.get('pushName', 'Unknown')
-            first = is_first_time(phone)
+            first = is_first_time(phone, tenant_id)
 
-            log_message(phone, remote_name, text, 'received', 'received', instance)
-            handle_incoming_text(phone, remote_name, text, first, instance_name=instance)
+            log_message(phone, remote_name, text, 'received', 'received', instance, tenant_id=tenant_id)
+            handle_incoming_text(
+                phone, remote_name, text, first, instance_name=instance, tenant_id=tenant_id
+            )
 
-def handle_incoming_text(phone, name, text, first_time, instance_name=None):
+def handle_incoming_text(phone, name, text, first_time, instance_name=None, tenant_id=1):
     instance = instance_name or EVOLUTION_INSTANCE
     text_lower = (text or "").strip().lower()
 
@@ -109,14 +126,14 @@ def handle_incoming_text(phone, name, text, first_time, instance_name=None):
     if any(kw in text_lower for kw in STOP_KEYWORDS):
         set_opted_out(phone, True, instance_name=instance)
         send_whatsapp_message(phone, STOP_CONFIRM_MSG, instance_name=instance)
-        log_message(phone, name, STOP_CONFIRM_MSG, 'sent', 'sent', instance, 'auto_reply')
+        log_message(phone, name, STOP_CONFIRM_MSG, 'sent', 'sent', instance, 'auto_reply', tenant_id=tenant_id)
         logger.info(f"Contact {phone} ({name}) opted out from promotional messages (instance: {instance}).")
         return
     # Handle START / re-subscribe (per instance)
     if text_lower == "start":
         set_opted_out(phone, False, instance_name=instance)
         send_whatsapp_message(phone, START_CONFIRM_MSG, instance_name=instance)
-        log_message(phone, name, START_CONFIRM_MSG, 'sent', 'sent', instance, 'auto_reply')
+        log_message(phone, name, START_CONFIRM_MSG, 'sent', 'sent', instance, 'auto_reply', tenant_id=tenant_id)
         logger.info(f"Contact {phone} ({name}) re-subscribed (instance: {instance}).")
         return
 
@@ -131,7 +148,7 @@ def handle_incoming_text(phone, name, text, first_time, instance_name=None):
             "Emergency ke liye: +91-XXXXXXXXXX"
         )
         send_whatsapp_message(phone, after_hours_msg, instance_name=instance)
-        log_message(phone, name, after_hours_msg, 'sent', 'sent', instance, 'auto_reply')
+        log_message(phone, name, after_hours_msg, 'sent', 'sent', instance, 'auto_reply', tenant_id=tenant_id)
         return
 
     if first_time:
@@ -144,7 +161,7 @@ def handle_incoming_text(phone, name, text, first_time, instance_name=None):
             "3️⃣ Support ke liye"
         )
         send_whatsapp_message(phone, welcome_msg, instance_name=instance)
-        log_message(phone, name, welcome_msg, 'sent', 'sent', instance, 'auto_reply')
+        log_message(phone, name, welcome_msg, 'sent', 'sent', instance, 'auto_reply', tenant_id=tenant_id)
 
         quick_replies = (
             "⬇️ Quick reply ke liye yeh type karein:\n"
@@ -153,7 +170,7 @@ def handle_incoming_text(phone, name, text, first_time, instance_name=None):
             "🔹 SUPPORT CHAHIYE"
         )
         send_whatsapp_message(phone, quick_replies, instance_name=instance)
-        log_message(phone, name, quick_replies, 'sent', 'sent', instance, 'auto_reply')
+        log_message(phone, name, quick_replies, 'sent', 'sent', instance, 'auto_reply', tenant_id=tenant_id)
         return
 
     text_lower = text.lower()
@@ -161,10 +178,10 @@ def handle_incoming_text(phone, name, text, first_time, instance_name=None):
     for keywords, reply_text in KEYWORDS.items():
         if any(kw in text_lower for kw in keywords):
             send_whatsapp_message(phone, reply_text, instance_name=instance)
-            log_message(phone, name, reply_text, 'sent', 'sent', instance, 'auto_reply')
+            log_message(phone, name, reply_text, 'sent', 'sent', instance, 'auto_reply', tenant_id=tenant_id)
             matched = True
             break
 
     if not matched:
         send_whatsapp_message(phone, DEFAULT_REPLY, instance_name=instance)
-        log_message(phone, name, DEFAULT_REPLY, 'sent', 'sent', instance, 'auto_reply')
+        log_message(phone, name, DEFAULT_REPLY, 'sent', 'sent', instance, 'auto_reply', tenant_id=tenant_id)

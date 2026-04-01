@@ -31,7 +31,7 @@ def wait_for_business_hours():
         logger.info(f"Outside business hours ({BUSINESS_START_HOUR}-{BUSINESS_END_HOUR}). Waiting...")
         time.sleep(600)  # Check every 10 mins
 
-def get_daily_sent_count(instance_name=None):
+def get_daily_sent_count(instance_name=None, tenant_id=1):
     """Messages sent today. If instance_name given, count for that instance only (per-number limit)."""
     conn = get_db_connection()
     try:
@@ -39,11 +39,14 @@ def get_daily_sent_count(instance_name=None):
         cur = conn.cursor()
         if instance_name:
             cur.execute(
-                "SELECT COUNT(*) as c FROM messages WHERE direction='sent' AND instance_name=? AND DATE(timestamp)=?",
-                (instance_name, today)
+                "SELECT COUNT(*) as c FROM messages WHERE direction='sent' AND instance_name=? AND tenant_id=? AND DATE(timestamp)=?",
+                (instance_name, tenant_id, today),
             )
         else:
-            cur.execute("SELECT total_sent FROM daily_stats WHERE date=?", (today,))
+            cur.execute(
+                "SELECT total_sent FROM daily_stats WHERE tenant_id=? AND date=?",
+                (tenant_id, today),
+            )
             row = cur.fetchone()
             return row['total_sent'] if row else 0
         row = cur.fetchone()
@@ -51,10 +54,11 @@ def get_daily_sent_count(instance_name=None):
     finally:
         conn.close()
 
-def get_next_available_instance():
-    """Return first instance from EVOLUTION_INSTANCES that has sent < DAILY_MESSAGE_LIMIT today, or None if all at limit."""
-    for instance in EVOLUTION_INSTANCES:
-        if get_daily_sent_count(instance) < DAILY_MESSAGE_LIMIT:
+def get_next_available_instance(instance_pool=None, tenant_id=1):
+    """Return first instance in pool that has sent < DAILY_MESSAGE_LIMIT today, or None if all at limit."""
+    pool = instance_pool if instance_pool is not None else EVOLUTION_INSTANCES
+    for instance in pool:
+        if get_daily_sent_count(instance, tenant_id) < DAILY_MESSAGE_LIMIT:
             return instance
     return None
 
@@ -193,7 +197,16 @@ def send_whatsapp_media(phone, media_path, caption="", media_type="video", insta
         return False, str(e)
 
 
-def process_bulk_campaign(campaign_name, contacts, template_text, media_path=None, media_type="video", instance_name=None):
+def process_bulk_campaign(
+    campaign_name,
+    contacts,
+    template_text,
+    media_path=None,
+    media_type="video",
+    instance_name=None,
+    tenant_id=1,
+    evolution_instance_pool=None,
+):
     """
     Run a bulk messaging campaign.
 
@@ -204,16 +217,29 @@ def process_bulk_campaign(campaign_name, contacts, template_text, media_path=Non
         media_path (str):    Optional — path or URL to a video/image file.
         media_type (str):    'video', 'image', 'audio', or 'document'.
         instance_name (str): Which WhatsApp number to use. Use AUTO_INSTANCE ("__auto__") or None to
-                            auto-rotate: when one number hits 200/day, switch to next in EVOLUTION_INSTANCES.
+                            auto-rotate: when one number hits 200/day, switch to next in the pool.
+        tenant_id (int):     Logged-in customer id (isolates stats and contacts).
+        evolution_instance_pool (list): That customer's Evolution instance names; defaults to EVOLUTION_INSTANCES.
     """
+    pool = evolution_instance_pool if evolution_instance_pool is not None else EVOLUTION_INSTANCES
+    if not pool:
+        logger.error("No Evolution instances configured for this tenant (evolution_instance_pool empty).")
+        return
+
     use_auto_rotation = instance_name in (None, "", AUTO_INSTANCE)
     instance = None  # set per contact when use_auto_rotation
-    logger.info(f"Starting Campaign [{campaign_name}] with {len(contacts)} contacts (mode: {'auto-rotate pool' if use_auto_rotation else instance_name or EVOLUTION_INSTANCE})")
+    default_inst = pool[0]
+    logger.info(
+        f"Starting Campaign [{campaign_name}] tenant={tenant_id} with {len(contacts)} contacts "
+        f"(mode: {'auto-rotate pool' if use_auto_rotation else instance_name or default_inst})"
+    )
     if media_path:
         logger.info(f"Media attached: {media_path} (type: {media_type})")
 
     # Check connection for the instance we'll use first (so user sees why sends fail)
-    first_instance = get_next_available_instance() if use_auto_rotation else (instance_name or EVOLUTION_INSTANCE)
+    first_instance = (
+        get_next_available_instance(pool, tenant_id) if use_auto_rotation else (instance_name or default_inst)
+    )
     if first_instance and not check_instance_connected(first_instance):
         logger.error(f"Cannot send: instance '{first_instance}' is not connected. Open http://localhost:8080/manager and scan QR for this instance.")
 
@@ -225,21 +251,21 @@ def process_bulk_campaign(campaign_name, contacts, template_text, media_path=Non
         name = contact.get('Name', '')
 
         if use_auto_rotation:
-            instance = get_next_available_instance()
+            instance = get_next_available_instance(pool, tenant_id)
             if instance is None:
                 logger.warning("All instances at daily limit (200/day). Campaign paused. Resume tomorrow or add more numbers.")
                 break
         else:
-            instance = instance_name or EVOLUTION_INSTANCE
+            instance = instance_name or default_inst
 
         # Skip contacts who replied STOP for this instance
-        if is_opted_out(phone, instance):
+        if is_opted_out(phone, instance, tenant_id):
             logger.info(f"[{i+1}/{len(contacts)}] Skipping {name} ({phone}) — opted out (STOP) for {instance}.")
             continue
 
         # Business hours check removed — sending allowed 24/7
 
-        if not use_auto_rotation and get_daily_sent_count(instance) >= DAILY_MESSAGE_LIMIT:
+        if not use_auto_rotation and get_daily_sent_count(instance, tenant_id) >= DAILY_MESSAGE_LIMIT:
             logger.warning("Daily message limit reached. Campaign Paused permanently. Start a new one later.")
             break
 
@@ -266,7 +292,7 @@ def process_bulk_campaign(campaign_name, contacts, template_text, media_path=Non
             success, res = send_whatsapp_message(phone, message, instance_name=instance)
 
         status = 'sent' if success else 'failed'
-        log_message(phone, name, message, 'sent', status, instance, campaign_name)
+        log_message(phone, name, message, 'sent', status, instance, campaign_name, tenant_id=tenant_id)
 
         if success:
             sent_in_batch += 1

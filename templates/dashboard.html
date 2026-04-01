@@ -20,12 +20,23 @@
                 </div>
             </div>
             <div class="header-right">
-                <div class="user-info">
+                <div class="user-info" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                    {% if user.public_id %}
+                    <div class="account-id-block"
+                        style="font-size:11px;line-height:1.35;text-align:right;max-width:min(100vw - 48px, 320px);">
+                        <span style="color:var(--muted, #8b949e);display:block;margin-bottom:2px;">Account ID</span>
+                        <code
+                            style="user-select:all;word-break:break-all;font-size:11px;padding:4px 6px;border-radius:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);">{{ user.public_id }}</code>
+                    </div>
+                    {% endif %}
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;justify-content:flex-end;">
                     <span class="username">👤 {{ user.username }}</span>
                     <span class="subscription {{ 'expired' if days_left == 0 else 'active' }}">
                         {{ 'Expired' if days_left == 0 else days_left ~ ' days left' }}
                     </span>
+                    <a href="/setup/whatsapp" class="btn-logout" style="margin-right: 8px;">WhatsApp setup</a>
                     <a href="/logout" class="btn-logout">Logout</a>
+                    </div>
                 </div>
             </div>
         </header>
@@ -86,17 +97,23 @@
                         style="background: rgba(88,166,255,0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(88,166,255,0.3); margin-bottom: 16px;">
                         <label style="font-weight: 700; color: #58a6ff;">📱 WhatsApp Number</label>
                         <select name="instance_name" required style="margin-top: 8px;">
-                            <option value="__auto__" selected>🔄 Auto — rotate (200 per number, then next number)
-                            </option>
+                            {% if instance_auto_available | default(false) %}
+                            <option value="__auto__" selected>🔄 Auto — rotate (200 per number, then next number)</option>
+                            {% endif %}
                             {% for inst in (instances or []) %}
-                            <option value="{{ inst }}">{{ inst }}</option>
+                            <option value="{{ inst }}" {% if not (instance_auto_available | default(false)) and loop.first %}selected{% endif %}>{{ inst }}</option>
                             {% else %}
-                            <option value="marketing_instance">marketing_instance</option>
+                            <option value="marketing_instance" selected>marketing_instance</option>
                             {% endfor %}
                         </select>
-                        <small class="form-hint" style="display: block; margin-top: 6px;">Auto = use multiple numbers in
-                            sequence. Or pick one number. Add instances in Evolution API (port 8080) and in .env
-                            EVOLUTION_INSTANCES.</small>
+                        <small class="form-hint" style="display: block; margin-top: 6px;">
+                            {% if instance_auto_available | default(false) %}
+                            Every line you are allowed to use appears here. Pick one instance, or <strong>Auto</strong> to move to the next line when the current one hits the daily limit (see <a href="/setup/whatsapp">WhatsApp setup</a>).
+                            {% else %}
+                            Only one instance is available — all messages use this line. Add more instance names (admin) to enable <strong>Auto</strong> rotation.
+                            {% endif %}
+                            Fallback from <code>EVOLUTION_INSTANCES</code> in .env if none are configured.
+                        </small>
                     </div>
                     <div class="form-group">
                         <label>Campaign Name</label>
