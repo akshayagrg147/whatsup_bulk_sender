@@ -28,3 +28,18 @@ TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
 DB_PATH = os.getenv("DB_PATH", "./data/marketing.db")
 YOUR_STORE_URL = os.getenv("YOUR_STORE_URL", "https://yourstore.com")
 YOUR_PHONE = os.getenv("YOUR_PHONE", "+91-XXXXXXXXXX")
+
+AI_AUTOREPLY_ENABLED = os.getenv("AI_AUTOREPLY_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
+AI_AUTOREPLY_MAX_CONTEXT_MESSAGES = int(os.getenv("AI_AUTOREPLY_MAX_CONTEXT_MESSAGES", 8))
+AI_BUSINESS_NAME = os.getenv("AI_BUSINESS_NAME", "our business").strip() or "our business"
+AI_ASSISTANT_LANGUAGE = os.getenv("AI_ASSISTANT_LANGUAGE", "en").strip() or "en"
+AI_SYSTEM_PROMPT = os.getenv(
+    "AI_SYSTEM_PROMPT",
+    (
+        "You are a professional WhatsApp business assistant. Reply briefly, clearly, and helpfully. "
+        "Keep replies suitable for WhatsApp, avoid long paragraphs, do not invent pricing or policies, "
+        "and ask a short follow-up question when needed."
+    ),
+).strip()

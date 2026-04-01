@@ -1,14 +1,13 @@
 import sqlite3
-import datetime
-from database import get_db_connection
+from database import get_db_connection, get_ist_now
 
 def get_overview_stats(tenant_id=1):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         
-        # Today stats
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        # Today stats (same calendar day as log_message / daily_stats — uses configured TIMEZONE)
+        today = get_ist_now().strftime("%Y-%m-%d")
         cur.execute(
             "SELECT total_sent, total_delivered, total_read, total_replied, total_blocked FROM daily_stats WHERE tenant_id=? AND date=?",
             (tenant_id, today),

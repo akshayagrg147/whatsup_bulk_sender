@@ -24,6 +24,10 @@ def _uuid_compact(s):
     return "".join(c for c in str(s or "") if c.isalnum()).lower()
 
 
+def _phone_digits(s):
+    return "".join(c for c in str(s or "") if c.isdigit())
+
+
 def public_id_matches_instance_name(public_id, instance_name):
     """True if Evolution instance name is this account's public_id (with or without hyphens)."""
     if not public_id or not instance_name:
@@ -441,20 +445,45 @@ def log_message(phone, name, msg_text, direction, status, instance_name, campaig
     finally:
         conn.close()
 
+def _find_latest_sent_for_jid(cur, tenant_id, jid_user_part):
+    """
+    Match webhook JID user (e.g. 91876543210) to our messages.phone (Excel may add 91, spaces, +).
+    Scan recent sent rows so ACKs still match after large blasts.
+    """
+    jid_digits = _phone_digits(jid_user_part)
+    if not jid_digits:
+        return None
+    cur.execute(
+        """
+        SELECT id, status, phone FROM messages
+        WHERE direction='sent' AND tenant_id=?
+        ORDER BY timestamp DESC LIMIT 2500
+        """,
+        (tenant_id,),
+    )
+    rows = cur.fetchall()
+    for r in rows:
+        if _phone_digits(r["phone"]) == jid_digits:
+            return r
+    if len(jid_digits) >= 10:
+        tail = jid_digits[-10:]
+        for r in rows:
+            pd = _phone_digits(r["phone"])
+            if len(pd) >= 10 and pd[-10:] == tail:
+                return r
+    return None
+
+
 def update_message_status(phone, status, tenant_id=1):
     conn = get_db_connection()
     today = get_ist_now().strftime("%Y-%m-%d")
     try:
         with conn:
             cur = conn.cursor()
-            cur.execute('''
-                SELECT id, status FROM messages
-                WHERE phone=? AND direction='sent' AND tenant_id=?
-                ORDER BY timestamp DESC LIMIT 1
-            ''', (phone, tenant_id))
-            row = cur.fetchone()
+            row = _find_latest_sent_for_jid(cur, tenant_id, phone)
 
             if row and row['status'] != status:
+                old_status = row['status']
                 msg_id = row['id']
                 conn.execute('UPDATE messages SET status=? WHERE id=?', (status, msg_id))
 
@@ -465,6 +494,13 @@ def update_message_status(phone, status, tenant_id=1):
                         (tenant_id, today),
                     )
                 elif status == 'read':
+                    # Some webhooks emit READ without a prior DELIVERY_ACK; count delivery so rates stay sensible.
+                    if old_status == 'sent':
+                        conn.execute(
+                            '''INSERT INTO daily_stats (tenant_id, date, total_delivered) VALUES (?, ?, 1)
+                               ON CONFLICT(tenant_id, date) DO UPDATE SET total_delivered=total_delivered+1''',
+                            (tenant_id, today),
+                        )
                     conn.execute(
                         '''INSERT INTO daily_stats (tenant_id, date, total_read) VALUES (?, ?, 1)
                            ON CONFLICT(tenant_id, date) DO UPDATE SET total_read=total_read+1''',

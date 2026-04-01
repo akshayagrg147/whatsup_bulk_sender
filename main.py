@@ -38,6 +38,430 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+BUSINESS_TEMPLATES = {
+    "fashion_boutique": {
+        "label": "Fashion Boutique",
+        "templates": [
+            "Hi {Name}, we have launched fresh arrivals in our latest collection. If you would like to see designs, prices, or available sizes, just reply COLLECTION and we will share the details.",
+            "Hello {Name}, sharing an update from our boutique. New styles are now available for this week. Reply PRICE if you want the catalogue and rate details.",
+            "Hi {Name}, our new collection is now live with selected premium pieces and limited stock. If you want the latest options, reply SHOW ME and our team will assist you."
+        ],
+    },
+    "salon_spa": {
+        "label": "Salon & Spa",
+        "templates": [
+            "Hi {Name}, this is a quick update from our salon. We have appointments available this week for hair, skin, and beauty services. Reply BOOK to reserve your preferred slot.",
+            "Hello {Name}, we are offering professional salon services with limited appointment slots this week. If you would like pricing or a booking, reply APPOINTMENT.",
+            "Hi {Name}, your self-care session can be scheduled this week. Reply SERVICE to know our popular salon packages and available timings."
+        ],
+    },
+    "real_estate": {
+        "label": "Real Estate",
+        "templates": [
+            "Hi {Name}, we have new property options available that may match your requirement. Reply DETAILS and we will share location, pricing, and site visit information.",
+            "Hello {Name}, this is a professional update regarding new residential and investment properties. If you want the brochure and price range, reply PROPERTY.",
+            "Hi {Name}, we are currently showing selected properties in prime locations. Reply VISIT if you would like us to arrange details or a site visit."
+        ],
+    },
+    "restaurant_cafe": {
+        "label": "Restaurant & Cafe",
+        "templates": [
+            "Hi {Name}, we would love to welcome you this week. Our latest menu highlights and chef specials are now available. Reply MENU if you would like us to share them.",
+            "Hello {Name}, thank you for staying connected with us. We are taking bookings for dine-in and group orders. Reply BOOK to reserve your table.",
+            "Hi {Name}, we have prepared a fresh set of specials for this week. Reply OFFERS if you would like our menu and current recommendations."
+        ],
+    },
+    "education_coaching": {
+        "label": "Education & Coaching",
+        "templates": [
+            "Hi {Name}, admissions and new batches are now open for our upcoming program. Reply DETAILS if you would like course information, fees, and timings.",
+            "Hello {Name}, we are starting a new batch soon with focused guidance and limited seats. Reply COURSE to receive the full curriculum and schedule.",
+            "Hi {Name}, this is an update from our institute. If you are interested in our upcoming classes, reply ENROLL and we will share complete details professionally."
+        ],
+    },
+    "healthcare_clinic": {
+        "label": "Healthcare Clinic",
+        "templates": [
+            "Hi {Name}, this is a quick update from our clinic. Appointments are available for consultation this week. Reply APPOINTMENT if you would like booking assistance.",
+            "Hello {Name}, we are available for consultation and follow-up support. Reply DOCTOR to receive appointment timings and service details.",
+            "Hi {Name}, if you would like to schedule a consultation or know our available timings, simply reply BOOK and our team will assist you."
+        ],
+    },
+    "electronics_mobile": {
+        "label": "Electronics & Mobile",
+        "templates": [
+            "Hi {Name}, we have fresh stock and selected offers available on mobile and electronic products. Reply PRICE if you would like the latest list.",
+            "Hello {Name}, this is a product update from our store. We can share current models, pricing, and availability. Reply DETAILS to receive the information.",
+            "Hi {Name}, we are currently offering selected electronics with updated pricing and stock availability. Reply CATALOGUE if you want the latest options."
+        ],
+    },
+    "jewellery": {
+        "label": "Jewellery",
+        "templates": [
+            "Hi {Name}, our latest jewellery designs are now available. If you would like to see new collections, pricing, or custom options, reply COLLECTION.",
+            "Hello {Name}, we are sharing a professional update about our newest jewellery pieces. Reply PRICE for design previews and rate details.",
+            "Hi {Name}, we have introduced elegant new designs in our jewellery collection. Reply SHOW ME if you would like our team to share the latest pieces."
+        ],
+    },
+    "gym_fitness": {
+        "label": "Gym & Fitness",
+        "templates": [
+            "Hi {Name}, we are now onboarding new members for our fitness programs. Reply JOIN if you would like membership plans, timings, and coaching details.",
+            "Hello {Name}, this is an update from our fitness center. We have flexible plans and guided sessions available. Reply FITNESS to know more.",
+            "Hi {Name}, if you are planning to start your fitness journey, we would be happy to assist you with membership and class details. Reply PLAN for more information."
+        ],
+    },
+    "it_services": {
+        "label": "IT Services",
+        "niches": {
+            "restaurant_cafe": {
+                "label": "Restaurants & Cafes",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we help restaurants and cafes get more orders through websites, Google visibility, online menu systems, and WhatsApp enquiry automation. If you would like a few ideas for your business, reply YES and I will share the details.",
+                                    "Hello {Name}, we work with food businesses to improve online presence, direct orders, and customer follow-up using websites and WhatsApp automation. Reply YES if you would like a quick overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum restaurants aur cafes ko website, Google visibility, online menu system, aur WhatsApp enquiry automation ke through zyada orders lane mein help karte hain. Agar aap chahein, to main aapke business ke liye kuch ideas share kar sakta hoon. Reply YES.",
+                                    "Hello {Name}, hum food businesses ki online presence aur direct orders improve karne mein help karte hain website aur WhatsApp automation ke through. Agar aap short overview chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up on our earlier conversation. We can help your restaurant improve direct orders and customer follow-up with a better website and WhatsApp automation. If useful, reply YES and I will share a short plan.",
+                                    "Hello {Name}, just checking back in. If you are still exploring ways to improve online orders and enquiry handling for your restaurant, reply YES and I will send a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli baat ko follow up kar raha hoon. Hum aapke restaurant ko better website aur WhatsApp automation ke through direct orders badhane mein help kar sakte hain. Agar useful lage to reply YES.",
+                                    "Hello {Name}, bas follow up kar raha hoon. Agar aap abhi bhi online orders aur enquiry handling improve karna chahte hain, to reply YES aur main short plan share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            "salon_spa": {
+                "label": "Salons & Beauty",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we work with salons and beauty businesses to improve appointments through websites, lead forms, Google Business optimization, and WhatsApp follow-up systems. Reply YES if you would like a quick overview.",
+                                    "Hello {Name}, we help salons get more booking enquiries through local SEO, landing pages, and automated WhatsApp follow-ups. Reply YES if you would like a few practical ideas."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum salons aur beauty businesses ko website, lead forms, Google Business optimization aur WhatsApp follow-up systems ke through zyada appointments lane mein help karte hain. Reply YES agar aap overview chahte hain.",
+                                    "Hello {Name}, hum salons ko local SEO, landing pages, aur automated WhatsApp follow-ups ke through zyada booking enquiries dilane mein help karte hain. Agar aap ideas chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up from our earlier discussion. We can help your salon improve appointment bookings with better online presence and WhatsApp follow-up. Reply YES if you would like a short proposal.",
+                                    "Hello {Name}, just checking back in. If you are still looking to improve bookings for your salon, reply YES and I will share a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli discussion ko follow up kar raha hoon. Hum aapke salon ki bookings better online presence aur WhatsApp follow-up ke through improve kar sakte hain. Agar aap chahen to reply YES.",
+                                    "Hello {Name}, bas follow up kar raha hoon. Agar aap salon bookings improve karne ke options dekh rahe hain, to reply YES aur main short overview share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            "real_estate": {
+                "label": "Real Estate",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we help real estate businesses generate more qualified enquiries through landing pages, CRM-ready lead capture, and WhatsApp automation. Reply YES if you would like to see how this can support your sales process.",
+                                    "Hello {Name}, we work with property businesses to improve lead generation through project landing pages, ad-ready funnels, and WhatsApp follow-up systems. Reply YES if you want a short overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum real estate businesses ko landing pages, CRM-ready lead capture, aur WhatsApp automation ke through zyada qualified enquiries lane mein help karte hain. Agar aap details chahte hain to reply YES.",
+                                    "Hello {Name}, hum property businesses ke liye project landing pages aur WhatsApp follow-up systems bana kar lead generation improve karte hain. Agar aap short overview chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up on our earlier conversation. We can help your real estate business improve enquiry handling with landing pages and WhatsApp lead follow-up. Reply YES if you would like a short proposal.",
+                                    "Hello {Name}, just checking back in. If you are still exploring ways to improve property lead flow, reply YES and I will send a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli baat ko follow up kar raha hoon. Hum aapke real estate business ke liye landing pages aur WhatsApp lead follow-up system bana sakte hain. Agar aap chahein to reply YES.",
+                                    "Hello {Name}, bas check kar raha hoon. Agar aap abhi bhi property lead flow improve karne ke options dekh rahe hain, to reply YES aur main short overview share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            "healthcare_clinic": {
+                "label": "Clinics & Healthcare",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we help clinics and healthcare businesses improve patient enquiries with professional websites, booking workflows, and WhatsApp communication systems. Reply YES if you would like more details.",
+                                    "Hello {Name}, we support clinics with appointment-focused websites, local visibility improvements, and automated patient enquiry follow-up on WhatsApp. Reply YES if you would like a quick overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum clinics aur healthcare businesses ko professional websites, booking workflows, aur WhatsApp communication systems ke through patient enquiries improve karne mein help karte hain. Reply YES agar aap details chahte hain.",
+                                    "Hello {Name}, hum clinics ke liye appointment-focused websites aur automated WhatsApp patient follow-up systems bana kar enquiry handling improve karte hain. Agar aap overview chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up from our earlier discussion. We can help your clinic improve appointment enquiries and patient communication with a stronger website and WhatsApp workflow. Reply YES if you would like a short proposal.",
+                                    "Hello {Name}, just checking back in. If you are still exploring ways to streamline clinic enquiries, reply YES and I will share a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli discussion ko follow up kar raha hoon. Hum aapki clinic enquiries aur patient communication ko better website aur WhatsApp workflow ke through improve kar sakte hain. Agar aap chahein to reply YES.",
+                                    "Hello {Name}, bas follow up kar raha hoon. Agar aap clinic enquiry system streamline karna chahte hain, to reply YES aur main short overview share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            "education_coaching": {
+                "label": "Coaching & Education",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we support coaching institutes and education businesses with admission-focused landing pages, enquiry systems, and WhatsApp follow-up automation. Reply YES if you would like a short overview.",
+                                    "Hello {Name}, we help institutes increase admission enquiries through better websites, lead forms, and structured WhatsApp communication. Reply YES if you would like more details."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum coaching institutes aur education businesses ko admission-focused landing pages, enquiry systems, aur WhatsApp follow-up automation ke through zyada enquiries lane mein help karte hain. Reply YES agar aap overview chahte hain.",
+                                    "Hello {Name}, hum institutes ko better websites aur structured WhatsApp communication ke through admission enquiries badhane mein help karte hain. Agar aap details chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up from our earlier conversation. We can help your institute improve admission enquiries with landing pages and WhatsApp follow-up automation. Reply YES if you would like a short plan.",
+                                    "Hello {Name}, just checking back in. If you are still exploring ways to improve student lead conversion, reply YES and I will share a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli baat ko follow up kar raha hoon. Hum aapke institute ke admission enquiries landing pages aur WhatsApp follow-up automation ke through improve kar sakte hain. Agar useful lage to reply YES.",
+                                    "Hello {Name}, bas follow up kar raha hoon. Agar aap student leads ko better convert karna chahte hain, to reply YES aur main short overview share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            "retail_fashion": {
+                "label": "Retail & Fashion",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we help retail and fashion businesses improve online sales through ecommerce websites, catalogue setup, and customer engagement automation on WhatsApp. Reply YES if you would like to explore this.",
+                                    "Hello {Name}, we support stores and boutiques with online catalogue systems, website improvements, and WhatsApp-based customer follow-up. Reply YES if you would like a quick overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum retail aur fashion businesses ko ecommerce websites, catalogue setup, aur WhatsApp customer engagement automation ke through online sales improve karne mein help karte hain. Reply YES agar aap details chahte hain.",
+                                    "Hello {Name}, hum stores aur boutiques ko online catalogue systems aur WhatsApp-based customer follow-up ke saath support karte hain. Agar aap overview chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up on our earlier discussion. We can help your retail business improve catalogue visibility and customer follow-up through a stronger online setup. Reply YES if you would like a short proposal.",
+                                    "Hello {Name}, just checking back in. If you are still exploring ways to improve online sales and customer engagement, reply YES and I will share a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli discussion ko follow up kar raha hoon. Hum aapke retail business ko better catalogue visibility aur customer follow-up ke saath online setup improve karne mein help kar sakte hain. Agar aap chahein to reply YES.",
+                                    "Hello {Name}, bas follow up kar raha hoon. Agar aap online sales aur customer engagement improve karna chahte hain, to reply YES aur main short overview share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            "gym_fitness": {
+                "label": "Gyms & Fitness",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we help gyms and fitness centers increase membership enquiries with lead-generation pages, local search visibility, and WhatsApp enquiry automation. Reply YES and I will share a few practical ideas.",
+                                    "Hello {Name}, we work with gyms to improve membership lead flow through websites, local presence, and automated WhatsApp follow-up. Reply YES if you would like more details."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum gyms aur fitness centers ko lead-generation pages, local search visibility, aur WhatsApp enquiry automation ke through membership enquiries badhane mein help karte hain. Reply YES agar aap ideas chahte hain.",
+                                    "Hello {Name}, hum gyms ke liye websites aur automated WhatsApp follow-up ke saath membership lead flow improve karte hain. Agar aap details chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up from our earlier conversation. We can help your fitness business improve membership enquiries with a stronger website and WhatsApp follow-up system. Reply YES if you would like a short proposal.",
+                                    "Hello {Name}, just checking back in. If you are still looking to improve gym lead conversion, reply YES and I will share a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli baat ko follow up kar raha hoon. Hum aapke fitness business ke membership enquiries ko better website aur WhatsApp follow-up system ke through improve kar sakte hain. Agar useful lage to reply YES.",
+                                    "Hello {Name}, bas follow up kar raha hoon. Agar aap gym lead conversion improve karna chahte hain, to reply YES aur main short overview share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            "hotels_travel": {
+                "label": "Hotels & Travel",
+                "journeys": {
+                    "cold_outreach": {
+                        "label": "Cold Outreach",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, we help hotels and travel businesses improve direct bookings through better websites, enquiry capture, and WhatsApp-based customer follow-up. Reply YES if you would like more information.",
+                                    "Hello {Name}, we support hospitality businesses with booking-focused websites, enquiry funnels, and WhatsApp automation to improve customer response speed. Reply YES if you would like a quick overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hum hotels aur travel businesses ko better websites, enquiry capture, aur WhatsApp-based customer follow-up ke through direct bookings improve karne mein help karte hain. Reply YES agar aap details chahte hain.",
+                                    "Hello {Name}, hum hospitality businesses ke liye booking-focused websites aur WhatsApp automation ke through customer response speed improve karte hain. Agar aap overview chahte hain to reply YES."
+                                ],
+                            },
+                        },
+                    },
+                    "warm_follow_up": {
+                        "label": "Warm Follow-up",
+                        "languages": {
+                            "english": {
+                                "label": "English",
+                                "templates": [
+                                    "Hi {Name}, following up from our earlier conversation. We can help your hotel or travel business improve direct enquiries and bookings with a stronger website and WhatsApp follow-up flow. Reply YES if you would like a short proposal.",
+                                    "Hello {Name}, just checking back in. If you are still exploring ways to improve direct bookings, reply YES and I will share a practical overview."
+                                ],
+                            },
+                            "hindi": {
+                                "label": "Hindi",
+                                "templates": [
+                                    "Hi {Name}, hamari pichhli baat ko follow up kar raha hoon. Hum aapke hotel ya travel business ki direct enquiries aur bookings ko better website aur WhatsApp follow-up flow ke through improve kar sakte hain. Reply YES agar aap chahen.",
+                                    "Hello {Name}, bas follow up kar raha hoon. Agar aap direct bookings improve karna chahte hain, to reply YES aur main short overview share karunga."
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
 # Authentication Setup
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -223,11 +647,20 @@ def dashboard():
         charts=charts,
         contacts=contacts,
         campaigns=campaigns,
+        business_templates=BUSINESS_TEMPLATES,
         instances=pool,
         instance_auto_available=len(pool) > 1,
         user=current_user,
         days_left=max(0, days_left),
     )
+
+
+@app.route("/api/dashboard-stats", methods=["GET"])
+@login_required
+def dashboard_stats_api():
+    """Live overview numbers for dashboard polling (same logic as page load)."""
+    return jsonify(get_overview_stats(current_user.id))
+
 
 @app.route('/upload', methods=['POST'])
 @login_required
@@ -267,24 +700,26 @@ def upload_file():
     if err:
         return jsonify({"error": err}), 400
         
-    # Handle optional media file (video/image/audio/document)
+    # Media sending is temporarily disabled.
+    # Keep these placeholders so we can re-enable video/image/audio/document sends later
+    # without changing the bulk sender contract again.
     media_path = None
     media_type = "video"
-    if 'media_file' in request.files and request.files['media_file'].filename != '':
-        media_file = request.files['media_file']
-        media_filename = secure_filename(media_file.filename)
-        media_path = os.path.join(app.config['UPLOAD_FOLDER'], media_filename)
-        media_file.save(media_path)
-        # Auto-detect media type from extension
-        ext = media_filename.rsplit('.', 1)[-1].lower()
-        type_map = {
-            'mp4': 'video', 'mov': 'video', 'avi': 'video',
-            'jpg': 'image', 'jpeg': 'image', 'png': 'image', 'gif': 'image',
-            'mp3': 'audio', 'ogg': 'audio', 'wav': 'audio',
-            'pdf': 'document', 'docx': 'document', 'xlsx': 'document'
-        }
-        media_type = type_map.get(ext, 'video')
-        logger.info(f"Media file received: {media_filename} ({media_type})")
+
+    # if 'media_file' in request.files and request.files['media_file'].filename != '':
+    #     media_file = request.files['media_file']
+    #     media_filename = secure_filename(media_file.filename)
+    #     media_path = os.path.join(app.config['UPLOAD_FOLDER'], media_filename)
+    #     media_file.save(media_path)
+    #     ext = media_filename.rsplit('.', 1)[-1].lower()
+    #     type_map = {
+    #         'mp4': 'video', 'mov': 'video', 'avi': 'video',
+    #         'jpg': 'image', 'jpeg': 'image', 'png': 'image', 'gif': 'image',
+    #         'mp3': 'audio', 'ogg': 'audio', 'wav': 'audio',
+    #         'pdf': 'document', 'docx': 'document', 'xlsx': 'document'
+    #     }
+    #     media_type = type_map.get(ext, 'video')
+    #     logger.info(f"Media file received: {media_filename} ({media_type})")
 
     t = threading.Thread(
         target=process_bulk_campaign,
@@ -297,8 +732,7 @@ def upload_file():
     )
     t.start()
     
-    media_info = f" + {media_type} media" if media_path else ""
-    return jsonify({"success": f"Campaign started with {len(contacts)} contacts{media_info}."})
+    return jsonify({"success": f"Campaign started with {len(contacts)} contacts."})
 
 @app.route('/webhook', methods=['POST'])
 @app.route('/webhook/<instance_name>', methods=['POST'])

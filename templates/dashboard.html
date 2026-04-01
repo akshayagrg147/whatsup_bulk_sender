@@ -16,7 +16,7 @@
             <div class="header-left">
                 <h1>WhatsApp Marketing Suite</h1>
                 <div class="status-indicator">
-                    <span class="status-dot"></span> Evolution API: Connected
+                    <span class="status-dot"></span> Online
                 </div>
             </div>
             <div class="header-right">
@@ -51,26 +51,26 @@
         {% endif %}
         {% endwith %}
 
-        <div class="overview-grid">
+        <div class="overview-grid" id="overview-stats">
             <div class="card">
                 <h3>Today's Sent</h3>
-                <div class="value">{{ stats.total_sent }}</div>
+                <div class="value" id="stat-total-sent">{{ stats.total_sent }}</div>
             </div>
             <div class="card">
                 <h3>Delivery Rate</h3>
-                <div class="value">{{ stats.delivery_rate }}%</div>
+                <div class="value" id="stat-delivery-rate">{{ stats.delivery_rate }}%</div>
             </div>
             <div class="card">
                 <h3>Read Rate</h3>
-                <div class="value">{{ stats.read_rate }}%</div>
+                <div class="value" id="stat-read-rate">{{ stats.read_rate }}%</div>
             </div>
             <div class="card">
                 <h3>Reply Rate</h3>
-                <div class="value">{{ stats.reply_rate }}%</div>
+                <div class="value" id="stat-reply-rate">{{ stats.reply_rate }}%</div>
             </div>
             <div class="card">
                 <h3>Blocked Count</h3>
-                <div class="value" style="color: var(--danger)">{{ stats.blocked_count }}</div>
+                <div class="value" id="stat-blocked-count" style="color: var(--danger)">{{ stats.blocked_count }}</div>
             </div>
         </div>
 
@@ -123,18 +123,49 @@
                         <label>Contacts Excel File</label>
                         <input type="file" name="file" accept=".xlsx,.xls" required>
                     </div>
-                    <div class="form-group media-upload">
-                        <label>📎 Attach Video / Image / Audio / PDF (optional)</label>
-                        <input type="file" name="media_file"
-                            accept=".mp4,.mov,.avi,.jpg,.jpeg,.png,.gif,.mp3,.ogg,.wav,.pdf,.docx,.xlsx">
-                        <small class="form-hint">Video, image, audio or document. Your message text will be sent as the
-                            caption.</small>
-                    </div>
                     <div class="form-group">
                         <label>Message Template (Use {Name})</label>
                         <textarea name="message_template"
                             placeholder="Hi {Name}, check out our new offers...&#10;&#10;Reply STOP to unsubscribe."
                             required></textarea>
+                    </div>
+                    <div class="template-assistant">
+                        <div class="template-assistant-header">
+                            <div>
+                                <h3>Professional Template Suggestions</h3>
+                                <p>Select your business type and click a template to use it in the message box.</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Business Type</label>
+                            <select id="businessTypeSelect">
+                                <option value="">Choose your business</option>
+                                {% for key, business in business_templates.items() %}
+                                <option value="{{ key }}">{{ business.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group template-niche-group" id="businessNicheGroup" hidden>
+                            <label>Industry Niche</label>
+                            <select id="businessNicheSelect">
+                                <option value="">Choose a niche</option>
+                            </select>
+                        </div>
+                        <div class="form-group template-niche-group" id="businessJourneyGroup" hidden>
+                            <label>Outreach Type</label>
+                            <select id="businessJourneySelect">
+                                <option value="">Choose outreach type</option>
+                            </select>
+                        </div>
+                        <div class="form-group template-niche-group" id="businessLanguageGroup" hidden>
+                            <label>Language</label>
+                            <select id="businessLanguageSelect">
+                                <option value="">Choose language</option>
+                            </select>
+                        </div>
+                        <div id="templateSuggestionList" class="template-suggestion-list">
+                            <div class="template-empty-state">Pick a business type to see professional message suggestions.</div>
+                        </div>
                     </div>
                     <button type="submit" class="btn">🚀 Start Bulk Send</button>
                     <div id="uploadStatus" style="margin-top: 10px; font-size: 14px; font-weight: 500;"></div>
@@ -224,10 +255,177 @@
     {% endif %}
 
     <div id="charts-data" style="display:none" data-charts='{{ charts | tojson | safe }}'></div>
+    <script id="business-templates-data" type="application/json">{{ business_templates | tojson | safe }}</script>
 
     <script>
-        // Auto-refresh dashboard every 2 minutes
-        setInterval(() => window.location.reload(), 120000);
+        // Refresh overview numbers often; full page less often (charts, contacts, campaigns)
+        function applyOverviewStats(s) {
+            const el = (id) => document.getElementById(id);
+            if (!s || !el('stat-total-sent')) return;
+            el('stat-total-sent').textContent = s.total_sent ?? '0';
+            el('stat-delivery-rate').textContent = (s.delivery_rate ?? 0) + '%';
+            el('stat-read-rate').textContent = (s.read_rate ?? 0) + '%';
+            el('stat-reply-rate').textContent = (s.reply_rate ?? 0) + '%';
+            el('stat-blocked-count').textContent = s.blocked_count ?? '0';
+        }
+        setInterval(() => {
+            fetch('/api/dashboard-stats', { credentials: 'same-origin' })
+                .then((r) => r.ok ? r.json() : Promise.reject())
+                .then(applyOverviewStats)
+                .catch(() => {});
+        }, 12000);
+        setInterval(() => window.location.reload(), 180000);
+
+        const businessTemplates = JSON.parse(document.getElementById('business-templates-data').textContent);
+        const businessTypeSelect = document.getElementById('businessTypeSelect');
+        const businessNicheGroup = document.getElementById('businessNicheGroup');
+        const businessNicheSelect = document.getElementById('businessNicheSelect');
+        const businessJourneyGroup = document.getElementById('businessJourneyGroup');
+        const businessJourneySelect = document.getElementById('businessJourneySelect');
+        const businessLanguageGroup = document.getElementById('businessLanguageGroup');
+        const businessLanguageSelect = document.getElementById('businessLanguageSelect');
+        const templateSuggestionList = document.getElementById('templateSuggestionList');
+        const messageTemplateInput = document.querySelector('textarea[name="message_template"]');
+
+        function resetTemplateFilters() {
+            businessNicheGroup.hidden = true;
+            businessJourneyGroup.hidden = true;
+            businessLanguageGroup.hidden = true;
+            businessNicheSelect.innerHTML = '<option value="">Choose a niche</option>';
+            businessJourneySelect.innerHTML = '<option value="">Choose outreach type</option>';
+            businessLanguageSelect.innerHTML = '<option value="">Choose language</option>';
+        }
+
+        function renderTemplateSuggestions(templates) {
+            if (!templates || !templates.length) {
+                templateSuggestionList.innerHTML = '<div class="template-empty-state">Pick a business type to see professional message suggestions.</div>';
+                return;
+            }
+
+            const cards = templates.map((template, index) => `
+                <button type="button" class="template-card" data-template-index="${index}">
+                    <span class="template-badge">Template ${index + 1}</span>
+                    <span class="template-copy">${template}</span>
+                    <span class="template-action">Use this template</span>
+                </button>
+            `).join('');
+
+            templateSuggestionList.innerHTML = cards;
+            templateSuggestionList.querySelectorAll('.template-card').forEach((card) => {
+                card.addEventListener('click', () => {
+                    const templateIndex = Number(card.dataset.templateIndex);
+                    messageTemplateInput.value = templates[templateIndex] + '\n\nReply STOP to unsubscribe.';
+                    messageTemplateInput.focus();
+                });
+            });
+        }
+
+        function renderBusinessNiches(config) {
+            if (!config || !config.niches) {
+                return false;
+            }
+
+            const options = Object.entries(config.niches).map(([key, niche]) => (
+                `<option value="${key}">${niche.label}</option>`
+            )).join('');
+
+            businessNicheSelect.innerHTML = `<option value="">Choose a niche</option>${options}`;
+            businessNicheGroup.hidden = false;
+            return true;
+        }
+
+        function renderJourneyOptions(nicheConfig) {
+            if (!nicheConfig || !nicheConfig.journeys) {
+                businessJourneyGroup.hidden = true;
+                businessJourneySelect.innerHTML = '<option value="">Choose outreach type</option>';
+                return false;
+            }
+
+            const options = Object.entries(nicheConfig.journeys).map(([key, journey]) => (
+                `<option value="${key}">${journey.label}</option>`
+            )).join('');
+            businessJourneySelect.innerHTML = `<option value="">Choose outreach type</option>${options}`;
+            businessJourneyGroup.hidden = false;
+            return true;
+        }
+
+        function renderLanguageOptions(journeyConfig) {
+            if (!journeyConfig || !journeyConfig.languages) {
+                businessLanguageGroup.hidden = true;
+                businessLanguageSelect.innerHTML = '<option value="">Choose language</option>';
+                return false;
+            }
+
+            const options = Object.entries(journeyConfig.languages).map(([key, language]) => (
+                `<option value="${key}">${language.label}</option>`
+            )).join('');
+            businessLanguageSelect.innerHTML = `<option value="">Choose language</option>${options}`;
+            businessLanguageGroup.hidden = false;
+            return true;
+        }
+
+        function getSelectedNicheConfig() {
+            const businessKey = businessTypeSelect.value;
+            const nicheKey = businessNicheSelect.value;
+            return businessTemplates[businessKey]?.niches?.[nicheKey] || null;
+        }
+
+        function getSelectedJourneyConfig() {
+            const nicheConfig = getSelectedNicheConfig();
+            return nicheConfig?.journeys?.[businessJourneySelect.value] || null;
+        }
+
+        businessTypeSelect.addEventListener('change', (event) => {
+            const config = businessTemplates[event.target.value];
+            resetTemplateFilters();
+            if (!config) {
+                renderTemplateSuggestions(null);
+                return;
+            }
+
+            const hasNiches = renderBusinessNiches(config);
+            if (hasNiches) {
+                renderTemplateSuggestions(null);
+                return;
+            }
+
+            renderTemplateSuggestions(config.templates);
+        });
+
+        businessNicheSelect.addEventListener('change', (event) => {
+            const businessKey = businessTypeSelect.value;
+            const businessConfig = businessTemplates[businessKey];
+            const nicheConfig = businessConfig?.niches?.[event.target.value];
+            businessJourneyGroup.hidden = true;
+            businessLanguageGroup.hidden = true;
+            businessJourneySelect.innerHTML = '<option value="">Choose outreach type</option>';
+            businessLanguageSelect.innerHTML = '<option value="">Choose language</option>';
+
+            if (renderJourneyOptions(nicheConfig)) {
+                renderTemplateSuggestions(null);
+                return;
+            }
+
+            renderTemplateSuggestions(nicheConfig?.templates || null);
+        });
+
+        businessJourneySelect.addEventListener('change', (event) => {
+            const journeyConfig = getSelectedNicheConfig()?.journeys?.[event.target.value];
+            businessLanguageGroup.hidden = true;
+            businessLanguageSelect.innerHTML = '<option value="">Choose language</option>';
+
+            if (renderLanguageOptions(journeyConfig)) {
+                renderTemplateSuggestions(null);
+                return;
+            }
+
+            renderTemplateSuggestions(journeyConfig?.templates || null);
+        });
+
+        businessLanguageSelect.addEventListener('change', (event) => {
+            const languageConfig = getSelectedJourneyConfig()?.languages?.[event.target.value];
+            renderTemplateSuggestions(languageConfig?.templates || null);
+        });
 
         document.getElementById('uploadForm').addEventListener('submit', function (e) {
             e.preventDefault();
