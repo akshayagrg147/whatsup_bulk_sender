@@ -1,8 +1,11 @@
 import os
+import io
+import uuid
 import threading
 import requests
 import logging
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, abort
+import pandas as pd
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, abort, send_file
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -14,6 +17,13 @@ from excel_parser import parse_contacts
 from analytics import get_overview_stats, get_chart_data, get_all_contacts, get_campaigns
 from auto_reply import process_webhook
 from bulk_sender import process_bulk_campaign, AUTO_INSTANCE
+from contact_scraper_tool import (
+    DEFAULT_SCRAPER_CATEGORIES,
+    DEFAULT_SCRAPER_LOCATIONS,
+    SCRAPER_MAX_RESULTS,
+    run_scrape as run_contact_scrape,
+    record_to_dict,
+)
 from scheduler import start_scheduler
 from database import (
     init_db,
@@ -37,6 +47,8 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+SCRAPER_JOBS = {}
+SCRAPER_JOBS_LOCK = threading.Lock()
 
 BUSINESS_TEMPLATES = {
     "fashion_boutique": {
@@ -652,6 +664,161 @@ def dashboard():
         instance_auto_available=len(pool) > 1,
         user=current_user,
         days_left=max(0, days_left),
+    )
+
+
+@app.route("/tools/contact-scraper", methods=["GET"])
+@login_required
+def contact_scraper_page():
+    return render_template(
+        "contact_scraper.html",
+        user=current_user,
+        days_left=max(0, (datetime.strptime(current_user.subscription_expiry, "%Y-%m-%d %H:%M:%S") - datetime.now()).days),
+        locations=DEFAULT_SCRAPER_LOCATIONS,
+        categories=DEFAULT_SCRAPER_CATEGORIES,
+        max_results_default=min(SCRAPER_MAX_RESULTS, 30),
+    )
+
+
+def _run_scraper_job(job_id, location, category, max_results, headless, only_without_website, debug_website, tenant_id):
+    def log_progress(message):
+        with SCRAPER_JOBS_LOCK:
+            job = SCRAPER_JOBS.get(job_id)
+            if not job:
+                return
+            job["logs"].append(message)
+            job["logs"] = job["logs"][-80:]
+
+    def collect_result(record):
+        with SCRAPER_JOBS_LOCK:
+            job = SCRAPER_JOBS.get(job_id)
+            if not job:
+                return
+            job["results"].append(record_to_dict(record))
+
+    try:
+        records = run_contact_scrape(
+            location=location,
+            category=category,
+            max_results=max_results,
+            headless=headless,
+            on_progress=log_progress,
+            on_result=collect_result,
+            only_without_website=only_without_website,
+            debug_website=debug_website,
+        )
+        with SCRAPER_JOBS_LOCK:
+            job = SCRAPER_JOBS.get(job_id)
+            if job:
+                job["status"] = "completed"
+                job["results"] = [record_to_dict(r) for r in records]
+    except Exception as e:
+        with SCRAPER_JOBS_LOCK:
+            job = SCRAPER_JOBS.get(job_id)
+            if job:
+                job["status"] = "failed"
+                job["error"] = str(e)
+
+
+@app.route("/api/contact-scraper/jobs", methods=["POST"])
+@login_required
+def start_contact_scraper_job():
+    body = request.get_json(silent=True) or {}
+    location = (body.get("location") or "").strip()
+    category = (body.get("category") or "").strip()
+    if not location or not category:
+        return jsonify({"error": "location and category are required"}), 400
+
+    try:
+        max_results = int(body.get("max_results", min(SCRAPER_MAX_RESULTS, 30)))
+    except (TypeError, ValueError):
+        max_results = min(SCRAPER_MAX_RESULTS, 30)
+    max_results = max(5, min(SCRAPER_MAX_RESULTS, max_results))
+
+    headless = body.get("headless", True) is not False
+    only_without_website = body.get("only_without_website", False) in (True, 1, "1", "true", "True", "yes")
+    debug_website = body.get("debug_website", False) in (True, 1, "1", "true", "True", "yes")
+
+    job_id = uuid.uuid4().hex
+    with SCRAPER_JOBS_LOCK:
+        SCRAPER_JOBS[job_id] = {
+            "id": job_id,
+            "tenant_id": current_user.id,
+            "status": "running",
+            "location": location,
+            "category": category,
+            "logs": ["Scrape job created."],
+            "results": [],
+            "error": "",
+        }
+
+    t = threading.Thread(
+        target=_run_scraper_job,
+        args=(job_id, location, category, max_results, headless, only_without_website, debug_website, current_user.id),
+        daemon=True,
+    )
+    t.start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/api/contact-scraper/jobs/<job_id>", methods=["GET"])
+@login_required
+def get_contact_scraper_job(job_id):
+    with SCRAPER_JOBS_LOCK:
+        job = SCRAPER_JOBS.get(job_id)
+        if not job or job["tenant_id"] != current_user.id:
+            return jsonify({"error": "Job not found"}), 404
+        return jsonify(
+            {
+                "id": job["id"],
+                "status": job["status"],
+                "location": job["location"],
+                "category": job["category"],
+                "logs": job["logs"],
+                "results": job["results"],
+                "error": job["error"],
+            }
+        )
+
+
+@app.route("/api/contact-scraper/jobs/<job_id>/download", methods=["GET"])
+@login_required
+def download_contact_scraper_job(job_id):
+    with SCRAPER_JOBS_LOCK:
+        job = SCRAPER_JOBS.get(job_id)
+        if not job or job["tenant_id"] != current_user.id:
+            return jsonify({"error": "Job not found"}), 404
+        results = list(job["results"])
+        location = job["location"]
+        category = job["category"]
+
+    if not results:
+        return jsonify({"error": "No results available for this job"}), 400
+
+    df = pd.DataFrame(
+        [
+            {
+                "#": idx + 1,
+                "Business Name": row.get("name", ""),
+                "Contact Number": row.get("phone", ""),
+                "Rating": row.get("rating", ""),
+                "Reviews": row.get("reviews", ""),
+                "Category": row.get("category", ""),
+                "Address": row.get("address", ""),
+                "Website": row.get("website", ""),
+            }
+            for idx, row in enumerate(results)
+        ]
+    )
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Contacts")
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"contacts_{category.replace(' ', '_')}_{location.replace(' ', '_')}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 

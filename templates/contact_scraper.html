@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Scraper</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>Contact Scraper</h1>
+                <div class="status-indicator">
+                    <span class="status-dot"></span> Online
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;justify-content:flex-end;">
+                        <span class="username">👤 {{ user.username }}</span>
+                        <span class="subscription {{ 'expired' if days_left == 0 else 'active' }}">
+                            {{ 'Expired' if days_left == 0 else days_left ~ ' days left' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <a href="/dashboard" class="app-nav-link">Dashboard</a>
+            <a href="/tools/contact-scraper" class="app-nav-link active">Contact Scraper</a>
+            <a href="/setup/whatsapp" class="app-nav-link">WhatsApp Setup</a>
+            <a href="/logout" class="app-nav-link">Logout</a>
+        </nav>
+
+        <div class="charts-grid" style="grid-template-columns: 1.1fr 1fr;">
+            <div class="table-section">
+                <h2>Start Scraping</h2>
+                <form id="scraperForm" class="upload-form">
+                    <div class="form-group">
+                        <label>Location</label>
+                        <select id="scraperLocationSelect">
+                            <option value="">Select location</option>
+                            {% for location in locations %}
+                            <option value="{{ location }}">{{ location }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" id="scraperLocationCustom" placeholder="Or type a custom location">
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="scraperCategorySelect">
+                            <option value="">Select category</option>
+                            {% for category in categories %}
+                            <option value="{{ category }}">{{ category }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" id="scraperCategoryCustom" placeholder="Or type a custom category">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Results</label>
+                        <input type="text" id="scraperMaxResults" value="{{ max_results_default }}">
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="scraperHeadless" checked> Run browser in headless mode</label>
+                        <label><input type="checkbox" id="scraperOnlyWithoutWebsite"> Only businesses without website</label>
+                        <label><input type="checkbox" id="scraperDebugWebsite"> Debug website extraction</label>
+                    </div>
+                    <button type="submit" class="btn">Start Scraping</button>
+                    <div id="scraperStatus" style="margin-top: 10px; font-size: 14px; font-weight: 500;"></div>
+                </form>
+            </div>
+
+            <div class="table-section">
+                <h2>Live Progress</h2>
+                <div id="scraperSummary" class="template-empty-state">Start a scrape to see progress and captured businesses.</div>
+                <div id="scraperLogs" class="scraper-log-list"></div>
+                <a id="scraperDownload" class="btn" style="display:none; margin-top: 16px; text-decoration:none;">Download Excel</a>
+            </div>
+        </div>
+
+        <div class="table-section">
+            <h2>Live Results</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Business Name</th>
+                            <th>Contact Number</th>
+                            <th>Rating</th>
+                            <th>Reviews</th>
+                            <th>Category</th>
+                            <th>Address</th>
+                            <th>Website</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scraperResultsBody">
+                        <tr>
+                            <td colspan="8" style="color: var(--text-secondary);">No scrape has been run yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentJobId = null;
+        let pollTimer = null;
+
+        const statusEl = document.getElementById('scraperStatus');
+        const summaryEl = document.getElementById('scraperSummary');
+        const logsEl = document.getElementById('scraperLogs');
+        const resultsBodyEl = document.getElementById('scraperResultsBody');
+        const downloadEl = document.getElementById('scraperDownload');
+
+        function renderLogs(logs) {
+            logsEl.innerHTML = '';
+            (logs || []).slice(-12).forEach((line) => {
+                const div = document.createElement('div');
+                div.className = 'scraper-log-line';
+                div.textContent = line;
+                logsEl.appendChild(div);
+            });
+        }
+
+        function renderResults(results) {
+            const rows = results || [];
+            if (!rows.length) {
+                resultsBodyEl.innerHTML = '<tr><td colspan="8" style="color: var(--text-secondary);">No results yet.</td></tr>';
+                return;
+            }
+            resultsBodyEl.innerHTML = rows.map((row, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${row.name || ''}</td>
+                    <td>${row.phone || ''}</td>
+                    <td>${row.rating || ''}</td>
+                    <td>${row.reviews || ''}</td>
+                    <td>${row.category || ''}</td>
+                    <td>${row.address || ''}</td>
+                    <td>${row.website || ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function pollJob() {
+            if (!currentJobId) return;
+            const response = await fetch(`/api/contact-scraper/jobs/${currentJobId}`, { credentials: 'same-origin' });
+            const data = await response.json();
+            if (!response.ok) {
+                statusEl.textContent = data.error || 'Unable to load scrape job.';
+                return;
+            }
+
+            summaryEl.textContent = `${data.results.length} businesses captured for ${data.category} in ${data.location}. Status: ${data.status}.`;
+            renderLogs(data.logs);
+            renderResults(data.results);
+
+            if (data.status === 'completed') {
+                statusEl.innerHTML = '<span style="color: var(--success)">Scrape completed.</span>';
+                downloadEl.style.display = 'inline-flex';
+                downloadEl.href = `/api/contact-scraper/jobs/${currentJobId}/download`;
+                clearInterval(pollTimer);
+                pollTimer = null;
+            } else if (data.status === 'failed') {
+                statusEl.innerHTML = `<span style="color: var(--danger)">Scrape failed: ${data.error || 'Unknown error'}</span>`;
+                clearInterval(pollTimer);
+                pollTimer = null;
+            } else {
+                statusEl.innerHTML = '<span style="color: var(--accent)">Scraping in progress...</span>';
+            }
+        }
+
+        document.getElementById('scraperForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const location = document.getElementById('scraperLocationCustom').value.trim() || document.getElementById('scraperLocationSelect').value;
+            const category = document.getElementById('scraperCategoryCustom').value.trim() || document.getElementById('scraperCategorySelect').value;
+            const maxResults = Number(document.getElementById('scraperMaxResults').value || {{ max_results_default }});
+
+            if (!location || !category) {
+                statusEl.innerHTML = '<span style="color: var(--danger)">Location and category are required.</span>';
+                return;
+            }
+
+            downloadEl.style.display = 'none';
+            renderLogs([]);
+            renderResults([]);
+            summaryEl.textContent = 'Creating scrape job...';
+
+            const response = await fetch('/api/contact-scraper/jobs', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    location,
+                    category,
+                    max_results: maxResults,
+                    headless: document.getElementById('scraperHeadless').checked,
+                    only_without_website: document.getElementById('scraperOnlyWithoutWebsite').checked,
+                    debug_website: document.getElementById('scraperDebugWebsite').checked
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                statusEl.innerHTML = `<span style="color: var(--danger)">${data.error || 'Unable to start scrape.'}</span>`;
+                return;
+            }
+
+            currentJobId = data.job_id;
+            statusEl.innerHTML = '<span style="color: var(--accent)">Scrape started.</span>';
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(pollJob, 2000);
+            pollJob();
+        });
+    </script>
+</body>
+</html>

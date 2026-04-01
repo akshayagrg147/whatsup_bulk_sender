@@ -7,3 +7,4 @@ python-dotenv
 pytz
 flask-login
 werkzeug
+playwright

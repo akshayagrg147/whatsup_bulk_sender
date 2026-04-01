@@ -41,6 +41,13 @@
             </div>
         </header>
 
+        <nav class="app-nav">
+            <a href="/dashboard" class="app-nav-link active">Dashboard</a>
+            <a href="/tools/contact-scraper" class="app-nav-link">Contact Scraper</a>
+            <a href="/setup/whatsapp" class="app-nav-link">WhatsApp Setup</a>
+            <a href="/logout" class="app-nav-link">Logout</a>
+        </nav>
+
         {% with messages = get_flashed_messages() %}
         {% if messages %}
         {% for message in messages %}
