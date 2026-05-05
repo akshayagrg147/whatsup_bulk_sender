@@ -34,7 +34,6 @@
                     <span class="subscription {{ 'expired' if days_left == 0 else 'active' }}">
                         {{ 'Expired' if days_left == 0 else days_left ~ ' days left' }}
                     </span>
-                    <a href="/setup/whatsapp" class="btn-logout" style="margin-right: 8px;">WhatsApp setup</a>
                     <a href="/logout" class="btn-logout">Logout</a>
                     </div>
                 </div>
@@ -43,8 +42,6 @@
 
         <nav class="app-nav">
             <a href="/dashboard" class="app-nav-link active">Dashboard</a>
-            <a href="/tools/contact-scraper" class="app-nav-link">Contact Scraper</a>
-            <a href="/setup/whatsapp" class="app-nav-link">WhatsApp Setup</a>
             <a href="/logout" class="app-nav-link">Logout</a>
         </nav>
 
@@ -115,7 +112,7 @@
                         </select>
                         <small class="form-hint" style="display: block; margin-top: 6px;">
                             {% if instance_auto_available | default(false) %}
-                            Every line you are allowed to use appears here. Pick one instance, or <strong>Auto</strong> to move to the next line when the current one hits the daily limit (see <a href="/setup/whatsapp">WhatsApp setup</a>).
+                            Every line you are allowed to use appears here. Pick one instance, or <strong>Auto</strong> to move to the next line when the current one hits the daily limit.
                             {% else %}
                             Only one instance is available — all messages use this line. Add more instance names (admin) to enable <strong>Auto</strong> rotation.
                             {% endif %}
