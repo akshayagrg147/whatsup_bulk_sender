@@ -7,7 +7,14 @@ import base64
 import os
 import pytz
 from config import *
-from database import log_message, get_db_connection, is_opted_out
+from database import (
+    log_message,
+    get_db_connection,
+    is_opted_out,
+    get_campaign_run_status,
+    update_campaign_run_progress,
+    finish_campaign_run,
+)
 
 # When user selects "Auto" in dashboard, use pool rotation (next number when 200/day reached)
 AUTO_INSTANCE = "__auto__"
@@ -84,6 +91,22 @@ def check_instance_connected(instance_name):
     except Exception as e:
         logger.error(f"Could not check instance '{instance_name}': {e}. Is Evolution API running at {EVOLUTION_BASE_URL}?")
         return False
+
+
+def campaign_stop_requested(campaign_run_id):
+    if not campaign_run_id:
+        return False
+    return get_campaign_run_status(campaign_run_id) == "stop_requested"
+
+
+def sleep_with_stop_checks(seconds, campaign_run_id=None):
+    remaining = max(0, int(seconds))
+    while remaining > 0:
+        if campaign_stop_requested(campaign_run_id):
+            return False
+        time.sleep(1)
+        remaining -= 1
+    return not campaign_stop_requested(campaign_run_id)
 
 def send_whatsapp_message(phone, text, instance_name=None):
     """Send a plain text WhatsApp message. instance_name = which WhatsApp number to use."""
@@ -206,6 +229,7 @@ def process_bulk_campaign(
     instance_name=None,
     tenant_id=1,
     evolution_instance_pool=None,
+    campaign_run_id=None,
 ):
     """
     Run a bulk messaging campaign.
@@ -272,7 +296,9 @@ def process_bulk_campaign(
         if sent_in_batch >= BATCH_SIZE:
             pause_time = random.randint(BATCH_PAUSE_MIN, BATCH_PAUSE_MAX) * 60
             logger.info(f"Batch limit reached. Pausing for {pause_time/60:.1f} minutes.")
-            time.sleep(pause_time)
+            if not sleep_with_stop_checks(pause_time, campaign_run_id):
+                logger.info(f"Campaign [{campaign_name}] stop requested during batch pause.")
+                break
             sent_in_batch = 0
 
         # Create personalized message with small random variation
@@ -280,9 +306,14 @@ def process_bulk_campaign(
         message = template_text.replace("{Name}", name).strip() + random.choice(variations)
 
         # Random delay before sending (anti-ban)
+        if campaign_stop_requested(campaign_run_id):
+            logger.info(f"Campaign [{campaign_name}] stop requested before sending contact {i+1}.")
+            break
         delay = random.randint(MESSAGE_DELAY_MIN, MESSAGE_DELAY_MAX)
         logger.info(f"[{i+1}/{len(contacts)}] Waiting {delay}s before sending to {name} ({phone})...")
-        time.sleep(delay)
+        if not sleep_with_stop_checks(delay, campaign_run_id):
+            logger.info(f"Campaign [{campaign_name}] stop requested during message delay.")
+            break
 
         logger.info(f"[{i+1}/{len(contacts)}] Sending to {name} via {instance}...")
 
@@ -292,12 +323,30 @@ def process_bulk_campaign(
             success, res = send_whatsapp_message(phone, message, instance_name=instance)
 
         status = 'sent' if success else 'failed'
-        log_message(phone, name, message, 'sent', status, instance, campaign_name, tenant_id=tenant_id)
+        log_message(
+            phone,
+            name,
+            message,
+            'sent',
+            status,
+            instance,
+            campaign_name,
+            tenant_id=tenant_id,
+            campaign_run_id=campaign_run_id,
+        )
 
         if success:
             sent_in_batch += 1
             total_sent_this_campaign += 1
+            if campaign_run_id:
+                update_campaign_run_progress(campaign_run_id, sent_inc=1)
+        elif campaign_run_id:
+            update_campaign_run_progress(campaign_run_id, failed_inc=1)
 
+    if campaign_run_id:
+        if campaign_stop_requested(campaign_run_id):
+            finish_campaign_run(campaign_run_id, "stopped")
+        else:
+            finish_campaign_run(campaign_run_id, "completed")
     logger.info(f"Campaign [{campaign_name}] finished. Sent {total_sent_this_campaign} messages.")
-
 

@@ -305,9 +305,14 @@ def init_db():
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     instance_name TEXT,
                     campaign_name TEXT,
+                    campaign_run_id INTEGER,
                     tenant_id INTEGER NOT NULL DEFAULT 1
                 )
             ''')
+            try:
+                conn.execute('ALTER TABLE messages ADD COLUMN campaign_run_id INTEGER')
+            except sqlite3.OperationalError:
+                pass
             # Table: contacts (per-tenant unique phone)
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS contacts (
@@ -367,6 +372,22 @@ def init_db():
                     public_id TEXT UNIQUE
                 )
             ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS campaign_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id INTEGER NOT NULL DEFAULT 1,
+                    campaign_name TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'running',
+                    total_contacts INTEGER DEFAULT 0,
+                    sent_count INTEGER DEFAULT 0,
+                    failed_count INTEGER DEFAULT 0,
+                    instance_mode TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    stopped_at DATETIME,
+                    completed_at DATETIME
+                )
+            ''')
 
             _run_tenant_migrations(conn)
 
@@ -388,7 +409,7 @@ def init_db():
     finally:
         conn.close()
 
-def log_message(phone, name, msg_text, direction, status, instance_name, campaign_name=None, tenant_id=1):
+def log_message(phone, name, msg_text, direction, status, instance_name, campaign_name=None, tenant_id=1, campaign_run_id=None):
     conn = get_db_connection()
     now = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
     today = get_ist_now().strftime("%Y-%m-%d")
@@ -396,9 +417,9 @@ def log_message(phone, name, msg_text, direction, status, instance_name, campaig
     try:
         with conn:
             conn.execute('''
-                INSERT INTO messages (phone, name, message_text, direction, status, timestamp, instance_name, campaign_name, tenant_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (phone, name, msg_text, direction, status, now, instance_name, campaign_name, tenant_id))
+                INSERT INTO messages (phone, name, message_text, direction, status, timestamp, instance_name, campaign_name, campaign_run_id, tenant_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (phone, name, msg_text, direction, status, now, instance_name, campaign_name, campaign_run_id, tenant_id))
 
             if direction == 'sent':
                 conn.execute('''
@@ -715,3 +736,112 @@ def update_subscription_expiry(username, days):
     finally:
         conn.close()
 
+
+def create_campaign_run(tenant_id, campaign_name, total_contacts, instance_mode):
+    conn = get_db_connection()
+    now = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute(
+                '''
+                INSERT INTO campaign_runs (
+                    tenant_id, campaign_name, status, total_contacts, instance_mode, created_at, started_at
+                ) VALUES (?, ?, 'running', ?, ?, ?, ?)
+                ''',
+                (tenant_id, campaign_name, total_contacts, instance_mode, now, now),
+            )
+            return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def get_campaign_run(run_id, tenant_id=None):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if tenant_id is None:
+            cur.execute("SELECT * FROM campaign_runs WHERE id=?", (run_id,))
+        else:
+            cur.execute("SELECT * FROM campaign_runs WHERE id=? AND tenant_id=?", (run_id, tenant_id))
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def get_campaign_run_status(run_id):
+    row = get_campaign_run(run_id)
+    return row["status"] if row else None
+
+
+def update_campaign_run_progress(run_id, sent_inc=0, failed_inc=0):
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute(
+                '''
+                UPDATE campaign_runs
+                SET sent_count = sent_count + ?,
+                    failed_count = failed_count + ?
+                WHERE id=?
+                ''',
+                (sent_inc, failed_inc, run_id),
+            )
+    finally:
+        conn.close()
+
+
+def request_stop_campaign(run_id, tenant_id):
+    conn = get_db_connection()
+    now = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute(
+                '''
+                UPDATE campaign_runs
+                SET status='stop_requested', stopped_at=?
+                WHERE id=? AND tenant_id=? AND status='running'
+                ''',
+                (now, run_id, tenant_id),
+            )
+            if cur.rowcount:
+                return True, "Stop requested."
+            row = get_campaign_run(run_id, tenant_id)
+            if not row:
+                return False, "Campaign not found."
+            if row["status"] == "stop_requested":
+                return True, "Stop already requested."
+            return False, f"Campaign is already {row['status']}."
+    finally:
+        conn.close()
+
+
+def finish_campaign_run(run_id, status):
+    conn = get_db_connection()
+    now = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with conn:
+            if status == "stopped":
+                conn.execute(
+                    '''
+                    UPDATE campaign_runs
+                    SET status='stopped',
+                        stopped_at=COALESCE(stopped_at, ?),
+                        completed_at=?
+                    WHERE id=? AND status IN ('running', 'stop_requested')
+                    ''',
+                    (now, now, run_id),
+                )
+            elif status == "completed":
+                conn.execute(
+                    '''
+                    UPDATE campaign_runs
+                    SET status='completed',
+                        completed_at=?
+                    WHERE id=? AND status IN ('running', 'stop_requested')
+                    ''',
+                    (now, run_id),
+                )
+    finally:
+        conn.close()

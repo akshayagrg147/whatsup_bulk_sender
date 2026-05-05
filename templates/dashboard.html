@@ -186,10 +186,13 @@
                         <tr>
                             <th>Campaign</th>
                             <th>Date</th>
+                            <th>Status</th>
                             <th>Sent</th>
+                            <th>Total</th>
                             <th>Delivered</th>
                             <th>Read Rate</th>
                             <th>Reply Rate</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -197,10 +200,25 @@
                         <tr>
                             <td>{{ c.campaign_name }}</td>
                             <td>{{ c.date }}</td>
+                            <td>
+                                <span class="badge {{ 'warning' if c.status in ['running', 'stop_requested'] else 'success' }}">
+                                    {{ c.status.replace('_', ' ').title() }}
+                                </span>
+                            </td>
                             <td>{{ c.sent }}</td>
+                            <td>{{ c.total_contacts }}</td>
                             <td>{{ c.delivered }}</td>
                             <td>{{ c.read_rate }}%</td>
                             <td>{{ c.reply_rate }}%</td>
+                            <td>
+                                {% if c.status == 'running' %}
+                                <button type="button" class="btn stop-campaign-btn" data-campaign-id="{{ c.id }}" style="padding: 8px 12px; font-size: 12px;">Stop</button>
+                                {% elif c.status == 'stop_requested' %}
+                                <span style="color: var(--warning); font-size: 12px;">Stopping...</span>
+                                {% else %}
+                                <span style="color: var(--muted); font-size: 12px;">-</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -461,6 +479,32 @@
                     btn.disabled = false;
                     btn.innerText = '🚀 Start Bulk Send';
                 });
+        });
+
+        document.querySelectorAll('.stop-campaign-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                const campaignId = button.dataset.campaignId;
+                if (!campaignId || !confirm('Stop this campaign? Messages already sent cannot be undone.')) return;
+
+                button.disabled = true;
+                button.textContent = 'Stopping...';
+
+                fetch(`/campaigns/${campaignId}/stop`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                })
+                    .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+                    .then(({ ok, data }) => {
+                        if (!ok) throw new Error(data.error || 'Stop request failed');
+                        window.location.reload();
+                    })
+                    .catch((err) => {
+                        alert(err.message || 'Could not stop campaign');
+                        button.disabled = false;
+                        button.textContent = 'Stop';
+                    });
+            });
         });
 
         const chartsData = JSON.parse(document.getElementById('charts-data').dataset.charts);

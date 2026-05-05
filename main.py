@@ -36,6 +36,9 @@ from database import (
     user_instance_display_pool,
     append_evolution_instance_name,
     create_user,
+    create_campaign_run,
+    get_campaign_run,
+    request_stop_campaign,
 )
 
 # Flask App
@@ -829,6 +832,18 @@ def dashboard_stats_api():
     return jsonify(get_overview_stats(current_user.id))
 
 
+@app.route('/campaigns/<int:campaign_id>/stop', methods=['POST'])
+@login_required
+def stop_campaign(campaign_id):
+    row = get_campaign_run(campaign_id, current_user.id)
+    if not row:
+        return jsonify({"error": "Campaign not found"}), 404
+    ok, message = request_stop_campaign(campaign_id, current_user.id)
+    if not ok:
+        return jsonify({"error": message}), 400
+    return jsonify({"success": True, "message": message})
+
+
 @app.route('/upload', methods=['POST'])
 @login_required
 @subscription_required
@@ -888,6 +903,13 @@ def upload_file():
     #     media_type = type_map.get(ext, 'video')
     #     logger.info(f"Media file received: {media_filename} ({media_type})")
 
+    campaign_run_id = create_campaign_run(
+        current_user.id,
+        campaign_name,
+        len(contacts),
+        "auto" if instance_name == AUTO_INSTANCE else instance_name,
+    )
+
     t = threading.Thread(
         target=process_bulk_campaign,
         args=(campaign_name, contacts, message_template, media_path, media_type),
@@ -895,11 +917,16 @@ def upload_file():
             "instance_name": instance_name,
             "tenant_id": current_user.id,
             "evolution_instance_pool": pool,
+            "campaign_run_id": campaign_run_id,
         },
+        daemon=True,
     )
     t.start()
     
-    return jsonify({"success": f"Campaign started with {len(contacts)} contacts."})
+    return jsonify({
+        "success": f"Campaign started with {len(contacts)} contacts.",
+        "campaign_id": campaign_run_id,
+    })
 
 @app.route('/webhook', methods=['POST'])
 @app.route('/webhook/<instance_name>', methods=['POST'])
